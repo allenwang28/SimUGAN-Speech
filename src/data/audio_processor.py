@@ -18,6 +18,7 @@ from scipy.fftpack import dct
 import soundfile as sf
 import os
 
+
 def get_file_data(audio_file_path):
     """Get the signal and sample rate from a given audio file
 
@@ -317,3 +318,27 @@ if __name__ == "__main__":
     f = plt.figure()
     plt.imshow(np.flipud(mfcc.T), cmap=plt.cm.jet, aspect=0.1, extent=[0,2,0,4])
     plt.show()
+
+
+class AudioProcessor(object):
+
+    @property
+    def folder_paths(self): 
+        return self._folder_paths
+
+    @property 
+    def pre_emphasis(self):
+        return self._pre_emphasis
+
+    @property 
+    def samplerate(self):
+        return self._samplerate
+
+    @property
+    def frame_size_ms(self):
+
+    @property 
+    def frame_stride_ms(self):
+        return self._frame_size_in_ms
+
+
