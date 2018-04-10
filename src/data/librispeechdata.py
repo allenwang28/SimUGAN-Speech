@@ -57,18 +57,39 @@ import re
 import urllib
 import tarfile
 
-import tensorflow as tf
+import pickle
 
-import data.audio as audio
+# import tensorflow as tf
 
-import data.data_util
+import src.data.audio as audio
+
+
+FEATURES = [ 
+             'spectrogram',
+             'transcription',
+             'id',
+           ]
+
+POSSIBLE_FOLDERS = [
+                     'dev-clean',
+                     'dev-other',
+                     'test-clean',
+                     'test-other',
+                     'test-clean-100',
+                     'test-clean-360',
+                     'train-other-500',
+                   ]
+
+DEFAULT_BATCH_SIZE = 10
+DEFAULT_MAX_TIME_STEPS = 50
+DEFAULT_MAX_OUTPUT_LENGTH = 50
 
 NUM_CHAR_FEATURES = 28 # 26 letters + 1 space + 1 EOF (represented as 0s)
 
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
 
-LIBRISPEECH_URL_BASE = "www.openslr.org/resources/12/{0}.tar.gz"
+LIBRISPEECH_URL_BASE = "www.openslr.org/resources/12/{0}"
 
 def _voice_txt_dict_from_path(folder_path):
     """Creates a dictionary between voice ids and txt file paths
@@ -129,140 +150,50 @@ def _transcriptions_and_flac(txt_file_path):
  
     return transcriptions, flac_files 
 
-def flacpath_transcription_id(folder_path):
+
+def flacpath_transcription_id(folder_path, save=True):
     """Get a all .flac files, transcriptions, and ids in a path
 
     Args:
         folder_path (str): Path to the folder
+        save (:obj:`bool`, optional): Whether or not
+            to save the data into a .pkl file
 
     Returns:
         dict: Contains flac files, transcriptions, and ids
 
     """
-    voice_txt_dict = voice_txt_dict_from_path(folder_path)
-    
-    flac_files = []
-    transcriptions = []
-    ids = []
+    # Use pickle so we don't have to run this every time
+    pkl_path = os.path.join(folder_path, 'unified.pkl') 
 
-    for voice_id in voice_txt_dict:
-        txt_files = voice_txt_dict[voice_id]
-        for txt_file in txt_files:
-            t, flacs = transcriptions_and_flac(txt_file)
-            flac_files += flacs
-            transcriptions += t
-
-            for flac_file in flac_files:
-                ids.append(voice_id)
-
-    return {'paths': flac_files, 'transcriptions': transcriptions, 'ids': ids}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _get_data_from_path(folder_path):
-    """Gets spectrograms, transcriptions, and ids from a folder path
-
-    Given the path to a LibriSpeech directory, get all STFT spectrograms from
-    all .flac files, their associated speaker (voice_id), and the transcription
-
-    Args:
-        folder_path (str): The path to a LibriSpeech folder
-
-    Returns:
-        list : The spectrograms 
-        list : The transcriptions from .trans.txt files
-        list : The voice ids
-
-    """
-    voice_txt_dict = voice_txt_dict_from_path(folder_path)
-
-    spectrograms = []
-    transcriptions = []
-    ids = []
-
-    for voice_id in voice_txt_dict:
-        txt_files = voice_txt_dict[voice_id]
-        for txt_file in txt_files:
-            t, flac_files = transcriptions_and_flac(txt_file)
-
-            transcriptions += t
-
-            for flac_file in flac_files:
-                # TODO - add parameters for these
-                spectrograms.append(_get_spectrogram_from_file(flac_file))
-                power_banks.append(get_filterbank_from_file(flac_file))
-                ids.append(voice_id)
-    return spectrograms, transcriptions, ids
-
-def _save_data(data, saved_file_paths):
-    """Given data, save to numpy arrays
-
-    Given a list of features, transcriptions, and ids, save each to numpy files.
-
-    Args:
-        data (tuple): A tuple of 3 lists - spectrograms, transcriptions, ids.
-        saved_file_paths (list of strings): Location to save files to 
+    try:
+        with open(pkl_path, 'rb') as f:
+            data = pickle.load(f)
+            return data
+    except:
+        # pickle file load unsuccessful
+        voice_txt_dict = voice_txt_dict_from_path(folder_path)
         
-    Returns:
+        flac_files = []
+        transcriptions = []
+        ids = []
 
-        list of strings: Locations of all the files saved
-    """
-    spectrograms, transcriptions, ids = data
-    saved_file_paths = [os.path.join(folder_path, "{0}.npy".format(file_name) for file_name in file_names]
+        for voice_id in voice_txt_dict:
+            txt_files = voice_txt_dict[voice_id]
+            for txt_file in txt_files:
+                t, flacs = transcriptions_and_flac(txt_file)
+                flac_files += flacs
+                transcriptions += t
 
-    # First 0-pad the features.
-    for i, features in enumerate([mfccs, power_banks]):
-        max_feature_length = max(feature.shape[0] for feature in features)
-        padded_features = []
-        for feature in features:
-            pad_length = max_feature_length - feature.shape[0]
-            padded = np.pad(feature, ((0, pad_length), (0,0)), 'constant')
-            padded_features.append(padded)
+                for flac_file in flac_files:
+                    ids.append(voice_id)
+        res = {'paths': flac_files, 'transcriptions': transcriptions, 'ids': ids}
 
-        padded_features = np.dstack(padded_features)
-       
-        np.save(saved_file_paths[i], padded_features)
+        if save:
+            pickle.dump(res, open(pkl_path, 'wb'))
 
-    transcriptions = np.array(transcriptions)
-    ids = np.array(ids)
+        return res
 
-    np.save(saved_file_paths[2], transcriptions)
-    np.save(saved_file_paths[3], ids)
-
-    return saved_file_paths
 
 def _print_download_progress(count, block_size, total_size):
     """Print the download progress.
@@ -276,32 +207,147 @@ def _print_download_progress(count, block_size, total_size):
     sys.stdout.write(msg)
     sys.stdout.flush()
 
-def _maybe_download_and_extract(folder_paths):
+
+def _maybe_download_and_extract(folder_dir, folder_names, verbose):
     """Download and extract data if it doesn't exist.
     
     Args:
-       folder_paths (list of strings): for instance,
-            path/to/dev-clean
-            path/to/dev-other
-            etc.
+        folder_dir (str): The path to LibriSpeech 
+        folder_paths (list of str): List of the folder names
+            (e.g., dev-clean, dev-test, etc.)
+        verbose (bool): Whether or not to progress
 
     """
-    for folder_path in folder_paths:
-        if not os.path.exists(folder_path):
-            tmp_file_path = folder_path + ".tar.gz"
-            base_name = os.path.basename(folder_path) # e.g. dev-clean, dev-other
-            url = LIBRISPEECH_URL_BASE.format(base_name)
 
-            print ("Folder not found. Downloading {0}".format(base_name))
+    for fname in folder_names:
+        if not os.path.exists(os.path.join(folder_dir, fname)):
+            tar_file_name = fname + ".tar.gz"
+            tar_file_path = os.path.join(folder_dir, tar_file_name)
+            url = LIBRISPEECH_URL_BASE.format(tar_file_name)
+            
+            if verbose:
+                print ("{0} not found. Downloading {1}".format(fname, tar_file_name))
 
-            file_path, _ = urllib.request.urlretrieve(url=url,
-                                                      filename=tmp_file_path,
-                                                      reporthook=_print_download_progress)
-            print()
-            print("Download complete. Now extracting.")
-            tarfile.open(name=tmp_file_path, mode="r:gz").extractall(folder_path)
+            if verbose:
+                file_path, _ = urllib.request.urlretrieve(url=url,
+                                                          filename=tar_file_path,
+                                                          reporthook=_print_download_progress)
+                print ()
+            else:
+                file_path, _ = urllib.request.urlretrieve(url=url,
+                                                          filename=tar_file_path)
 
-class LibriSpeechData:
+    if verbose: 
+        print ("Downloads complete. Extracting .tar.gz files")
+    tarfile.open(name=tmp_file_path, mode="r:gz").extractall(folder_dir)
+
+
+class LibriSpeechBatchGenerator:
+    def __init__(self,
+                 folder_dir,
+                 folder_names,
+                 features,
+                 feature_sizes,
+                 feature_params=None,
+                 batch_size=DEFAULT_BATCH_SIZE,
+                 save=None,
+                 randomize=True,
+                 verbose=True):
+        """LibriSpeechBatchGenerator class initializer
+        
+        Args:
+            folder_dir (str): The path to LibriSpeech 
+            folder_paths (list of str): List of the folder names
+                (e.g., dev-clean, dev-test, etc.)
+            features (list of str): List of desired features.
+                See constant defined FEATURES for list of valid features.
+            feature_sizes (list of int): List of maximum length of features.
+                Has to be the same shape as features. The features will be
+                truncated or padded to match the specified shape.
+                If no maximum/truncation desired, just provide None
+            feature_params (:obj:`list of objects`, optional): A list of 
+                feature parameters. If None provided, all features will
+                use default parameters.
+                Otherwise, feature_params should have the same shape as features.
+                An entry of None will use default parameters.
+                Defaults to None
+            batch_size (:obj:`int`, optional): The desired batch size.
+                Defaults to 10
+            save (:obj:`str`, optional): A path to a directory to save 
+                things we process.
+                If provided, we save: 
+                    - unified flac files, transcriptions, ids 
+                    - all listed features, padded
+                If None, the batch generator will have to process these every time.
+                Defaults to None.
+            randomize (:obj:`bool`', optional): Whether or not to randomize data
+                in batch generation. Defaults to True.
+            verbose (:obj:`bool`, optional): Whether or not to print statements.
+                Defaults to True.
+        
+        """
+        features = [f.lower() for f in features]
+        for feature in features:
+            if feature not in FEATURES: 
+                raise ValueError('Invalid feature')
+        self._features = features
+        self._feature_sizes = feature_sizes
+
+        if len(feature_sizes) != len(features):
+            raise ValueError('Length of feature_sizes should match length of features')
+
+        self._folder_dir = folder_dir
+        self._folder_names = folder_names
+        self._folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
+        self._v = verbose
+
+        _maybe_download_and_extract(folder_dir, folder_names, verbose) 
+
+
+        if save:
+            save_unified = True
+            spectro_path = os.path.join(save, "spectro.npy")
+
+        self._flac_paths = []
+        self._transcriptions = []
+        self._ids = []
+
+        for folder_path in self._folder_paths:
+            data = flacpath_transcription_id(folder_path, save=save_unified)
+            self._flac_paths += data['paths']
+            self._transcriptions += data['transcriptions']
+            self._ids += data['ids']
+        
+        if not feature_params:
+            feature_params = [None * len(features)]
+
+        self._data = []
+        for i, feature, feature_size, params in zip(features, feature_sizes, feature_params):
+            if feature == "spectrogram":
+                self._data.append(audio.get_spectrograms(self._flac_paths,
+                                                         params=params,
+                                                         maximum_size=feature_size,
+                                                         save_path=save))
+            else:
+                raise NotImplementedError("Right now we only support spectrograms")
+
+
+    def batch_generator(self):
+        pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+class LibriSpeechData_:
     def __init__(self, 
                  feature,
                  num_features,
@@ -365,7 +411,7 @@ class LibriSpeechData:
                           "{0}-".format(bn), 
                           "{0}-fb".format(bn)]
 
-            self._processed_data_paths = [os.path.join(folder_path, "{0}.npy".format(file_name) for file_name in file_names]
+            self._processed_data_paths = [os.path.join(folder_path, "{0}.npy".format(file_name)) for file_name in file_names]
 
             if any(not os.path.exists(file_path) for file_path in self._processed_data_paths):
                 data = _get_data_from_path(folder_path)
@@ -475,6 +521,113 @@ class LibriSpeechData:
 
                             inputs = []
                             outputs = []
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _get_data_from_path(folder_path):
+    """Gets spectrograms, transcriptions, and ids from a folder path
+
+    Given the path to a LibriSpeech directory, get all STFT spectrograms from
+    all .flac files, their associated speaker (voice_id), and the transcription
+
+    Args:
+        folder_path (str): The path to a LibriSpeech folder
+
+    Returns:
+        list : The spectrograms 
+        list : The transcriptions from .trans.txt files
+        list : The voice ids
+
+    """
+    voice_txt_dict = voice_txt_dict_from_path(folder_path)
+
+    spectrograms = []
+    transcriptions = []
+    ids = []
+
+    for voice_id in voice_txt_dict:
+        txt_files = voice_txt_dict[voice_id]
+        for txt_file in txt_files:
+            t, flac_files = transcriptions_and_flac(txt_file)
+
+            transcriptions += t
+
+            for flac_file in flac_files:
+                # TODO - add parameters for these
+                spectrograms.append(_get_spectrogram_from_file(flac_file))
+                power_banks.append(get_filterbank_from_file(flac_file))
+                ids.append(voice_id)
+    return spectrograms, transcriptions, ids
+
+def _save_data(data, saved_file_paths):
+    """Given data, save to numpy arrays
+
+    Given a list of features, transcriptions, and ids, save each to numpy files.
+
+    Args:
+        data (tuple): A tuple of 3 lists - spectrograms, transcriptions, ids.
+        saved_file_paths (list of strings): Location to save files to 
+        
+    Returns:
+
+        list of strings: Locations of all the files saved
+    """
+    spectrograms, transcriptions, ids = data
+    saved_file_paths = [os.path.join(folder_path, "{0}.npy".format(file_name)) for file_name in file_names]
+
+    # First 0-pad the features.
+    for i, features in enumerate([mfccs, power_banks]):
+        max_feature_length = max(feature.shape[0] for feature in features)
+        padded_features = []
+        for feature in features:
+            pad_length = max_feature_length - feature.shape[0]
+            padded = np.pad(feature, ((0, pad_length), (0,0)), 'constant')
+            padded_features.append(padded)
+
+        padded_features = np.dstack(padded_features)
+       
+        np.save(saved_file_paths[i], padded_features)
+
+    transcriptions = np.array(transcriptions)
+    ids = np.array(ids)
+
+    np.save(saved_file_paths[2], transcriptions)
+    np.save(saved_file_paths[3], ids)
+
+    return saved_file_paths
 
 """
 if __name__ == "__main__":
