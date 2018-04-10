@@ -32,6 +32,10 @@ DEFAULT_ONE_SIDED = True
 DEFAULT_SPECTRO_LOG = True
 DEFAULT_SPECTRO_THRESH = 5
 
+# TODO - Make lowcut/highcut normalized by unit
+DEFAULT_LOWCUT = 300
+DEFAULT_HIGHCUT = 3000
+
 DEFAULT_NFFT = 256
 DEFAULT_NUM_FILTERS = 40
 
@@ -41,6 +45,39 @@ DEFAULT_WINDOW_FUNCTION = None
 DEFAULT_CEP_LIFTER = 22
 
 DEFAULT_INVERT_ITER = 15
+
+def get_spectrogram_from_path(file_path,
+                              highcut=DEFAULT_HIGHCUT,
+                              lowcut=DEFAULT_LOWCUT,
+                              log=DEFAULT_SPECTRO_LOG
+                              thresh=DEFAULT_SPECTRO_THRESH,
+                              frame_size_in_ms=DEFAULT_FRAME_SIZE_MS
+                              frame_stride_in_ms=DEFAULT_FRAME_STRIDE_MS,
+                              real=DEFAULT_REAL):
+    """Get the spectrogram from a file.
+
+    Args:
+        file_path (str): Path to file
+        log (:obj:`bool`, optional): Whether to apply log transform
+        thresh (:obj:`int`, optional): Threshold minimum power for log spectrogram
+        frame_size_in_ms (:obj:`int`, optional): Size for fast fourier transform
+        frame_stride_in_ms (:obj:`int`, optional): Step size for the spectrogram
+        real (:obj:`bool`, optional): Whether or not we are dealing with only real numbers
+
+    Returns:
+        np.array: Spectrogram
+    """
+    signal, samplerate = get_file_data(file_path)
+    signal = butter_bandpass_filter(signal, samplerate, lowcut, highcut)
+
+    return stft_spectrogram(signal.astype('float64'),
+                            samplerate,
+                            frame_size_in_ms=frame_size_in_ms,
+                            frame_stride_in_ms=frame_stride_in_ms,
+                            log=log,
+                            thresh=thresh)
+
+
 
 
 def get_file_data(audio_file_path):
@@ -64,14 +101,18 @@ def get_file_data(audio_file_path):
     return (signal, samplerate)
 
 
-def butter_bandpass_filter(signal, samplerate, lowcut, highcut, order=DEFAULT_BPB_ORDER):
+def butter_bandpass_filter(signal, 
+                           samplerate, 
+                           lowcut=DEFAULT_LOWCUT, 
+                           highcut=DEFAULT_HIGHCUT, 
+                           order=DEFAULT_BPB_ORDER):
     """Apply a butter bandpass filter to the data.
 
     Args:
         signal (np.array): The signal from the audio file
         samplerate (int): Sample rate of the audio file
-        lowcut (int): Low frequency cut-off
-        highcut (int): High frequency cut-off
+        lowcut (:obj:`int`, optional): Low frequency cut-off
+        highcut (:obj:`int`, optional): High frequency cut-off
         order (:obj:`int`, optional): Order of the butter bandpass
 
     Returns:
@@ -339,7 +380,7 @@ def invert_stft_spectrogram(spectrogram,
     reg = np.max(spectrogram) / 1E8
     best = copy.deepcopy(spectrogram)
     for i in range(n_iterations):
-        set_zero_phase = (i == 0)
+        set_zero_phase = (i == 0) # Only set zero phase on the first iteration
         signal = invert_util(best, frame_step, True, set_zero_phase)
 
         windowed_signal = extract_frames_from_signal(signal, samplerate, frame_size_in_ms, frame_stride_in_ms)
@@ -350,22 +391,6 @@ def invert_stft_spectrogram(spectrogram,
     return np.real(signal)
 
 
-def get_power_spectrum_from_frames(frames, NFFT=DEFAULT_NFFT):
-    """Get the power spectrum from frames.
-
-    The power spectrum is:
-        |FFT(signal)|^2 / N
-
-    Args:
-        frames (np.array): the frames
-        NFFT (:obj:`int`, optional): N, typically 256 or 512
-
-    Returns:
-        np.array : the power spectrum 
-    """
-    return np.abs(get_fft_from_frames(frames, NFFT))**2 / NFFT
-
-
 def frequency_to_mel(f):
     """Convert frequency (Hz) to mel-scale"""
     return 2595 * np.log10(1 + (f/2)/700.)
@@ -374,4 +399,4 @@ def frequency_to_mel(f):
 def mel_to_frequency(m):
     """Convert from mel-scale to frequency (Hz)"""
     return 700 * (10**(m / 2595) - 1)
-
+    

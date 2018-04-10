@@ -59,14 +59,12 @@ import tarfile
 
 import tensorflow as tf
 
-from data.audio import get_mfcc_from_file
-from data.audio import get_filterbank_from_file
+import data.audio as audio
+
 import data.data_util
 
 NUM_CHAR_FEATURES = 28 # 26 letters + 1 space + 1 EOF (represented as 0s)
 
-ACCEPTED_FEATURES = ['mfcc', 
-                    'power_bank']
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
 
@@ -131,26 +129,87 @@ def _transcriptions_and_flac(txt_file_path):
  
     return transcriptions, flac_files 
 
-def _get_data_from_path(folder_path):
-    """Gets the features, transcriptions, and ids from a folder path
+def flacpath_transcription_id(folder_path):
+    """Get a all .flac files, transcriptions, and ids in a path
 
-    Given the path to a LibriSpeech directory, get all MFCC features from
+    Args:
+        folder_path (str): Path to the folder
+
+    Returns:
+        dict: Contains flac files, transcriptions, and ids
+
+    """
+    voice_txt_dict = voice_txt_dict_from_path(folder_path)
+    
+    flac_files = []
+    transcriptions = []
+    ids = []
+
+    for voice_id in voice_txt_dict:
+        txt_files = voice_txt_dict[voice_id]
+        for txt_file in txt_files:
+            t, flacs = transcriptions_and_flac(txt_file)
+            flac_files += flacs
+            transcriptions += t
+
+            for flac_file in flac_files:
+                ids.append(voice_id)
+
+    return {'paths': flac_files, 'transcriptions': transcriptions, 'ids': ids}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _get_data_from_path(folder_path):
+    """Gets spectrograms, transcriptions, and ids from a folder path
+
+    Given the path to a LibriSpeech directory, get all STFT spectrograms from
     all .flac files, their associated speaker (voice_id), and the transcription
 
     Args:
         folder_path (str): The path to a LibriSpeech folder
 
     Returns:
-        list : The MFCC features extracted from .flac files
-        list : The powerbank features extracted from .flac files
+        list : The spectrograms 
         list : The transcriptions from .trans.txt files
         list : The voice ids
 
     """
     voice_txt_dict = voice_txt_dict_from_path(folder_path)
 
-    mfccs = []
-    power_banks = []
+    spectrograms = []
     transcriptions = []
     ids = []
 
@@ -162,10 +221,11 @@ def _get_data_from_path(folder_path):
             transcriptions += t
 
             for flac_file in flac_files:
-                mfccs.append(get_mfcc_from_file(flac_file))
+                # TODO - add parameters for these
+                spectrograms.append(_get_spectrogram_from_file(flac_file))
                 power_banks.append(get_filterbank_from_file(flac_file))
                 ids.append(voice_id)
-    return mfccs, power_banks, transcriptions, ids
+    return spectrograms, transcriptions, ids
 
 def _save_data(data, saved_file_paths):
     """Given data, save to numpy arrays
@@ -173,14 +233,14 @@ def _save_data(data, saved_file_paths):
     Given a list of features, transcriptions, and ids, save each to numpy files.
 
     Args:
-        data (tuple): A tuple of 4 lists - mfccs, power_banks, transcriptions, ids.
+        data (tuple): A tuple of 3 lists - spectrograms, transcriptions, ids.
         saved_file_paths (list of strings): Location to save files to 
         
     Returns:
 
         list of strings: Locations of all the files saved
     """
-    mfccs, power_banks, transcriptions, ids = data
+    spectrograms, transcriptions, ids = data
     saved_file_paths = [os.path.join(folder_path, "{0}.npy".format(file_name) for file_name in file_names]
 
     # First 0-pad the features.
