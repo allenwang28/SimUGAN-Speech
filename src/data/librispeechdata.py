@@ -59,9 +59,12 @@ import tarfile
 
 import pickle
 
+import sys
+
 # import tensorflow as tf
 
 import src.data.audio as audio
+import src.tools.audio_util as audio_util
 
 
 FEATURES = [ 
@@ -89,7 +92,7 @@ NUM_CHAR_FEATURES = 28 # 26 letters + 1 space + 1 EOF (represented as 0s)
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
 
-LIBRISPEECH_URL_BASE = "www.openslr.org/resources/12/{0}"
+LIBRISPEECH_URL_BASE = "http://www.openslr.org/resources/12/{0}"
 
 def _voice_txt_dict_from_path(folder_path):
     """Creates a dictionary between voice ids and txt file paths
@@ -172,7 +175,7 @@ def flacpath_transcription_id(folder_path, save=True):
             return data
     except:
         # pickle file load unsuccessful
-        voice_txt_dict = voice_txt_dict_from_path(folder_path)
+        voice_txt_dict = _voice_txt_dict_from_path(folder_path)
         
         flac_files = []
         transcriptions = []
@@ -181,7 +184,7 @@ def flacpath_transcription_id(folder_path, save=True):
         for voice_id in voice_txt_dict:
             txt_files = voice_txt_dict[voice_id]
             for txt_file in txt_files:
-                t, flacs = transcriptions_and_flac(txt_file)
+                t, flacs = _transcriptions_and_flac(txt_file)
                 flac_files += flacs
                 transcriptions += t
 
@@ -199,8 +202,8 @@ def _print_download_progress(count, block_size, total_size):
     """Print the download progress.
 
     Used as a callback in _maybe_download_and_extract.
-    """
 
+    """
     pct_complete = float(count * block_size) / total_size
     msg = "\r- Download progress: {0:.1%}".format(pct_complete)
 
@@ -218,7 +221,6 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
         verbose (bool): Whether or not to progress
 
     """
-
     for fname in folder_names:
         if not os.path.exists(os.path.join(folder_dir, fname)):
             tar_file_name = fname + ".tar.gz"
@@ -233,13 +235,11 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
                                                           filename=tar_file_path,
                                                           reporthook=_print_download_progress)
                 print ()
+                print ("Download complete. Extracting {0}".format(tar_file_path))
             else:
                 file_path, _ = urllib.request.urlretrieve(url=url,
                                                           filename=tar_file_path)
-
-    if verbose: 
-        print ("Downloads complete. Extracting .tar.gz files")
-    tarfile.open(name=tmp_file_path, mode="r:gz").extractall(folder_dir)
+            tarfile.open(name=tar_file_path, mode="r:gz").extractall(folder_dir)
 
 
 class LibriSpeechBatchGenerator:
@@ -304,30 +304,43 @@ class LibriSpeechBatchGenerator:
         _maybe_download_and_extract(folder_dir, folder_names, verbose) 
 
 
+        # TODO - maybe check if the files already exist so we can avoid loading things
+        # we don't need
         if save:
             save_unified = True
-            spectro_path = os.path.join(save, "spectro.npy")
 
-        self._flac_paths = []
-        self._transcriptions = []
-        self._ids = []
+            # TODO - try looking at numpy again later.
+            # Using pickle because we get a MemoryError 
+            spectro_name = "spectro"
+            for fname in folder_names:
+                spectro_name += "_" + fname
+            # TODO - clean these next 4 lines up
+            for feature, feature_size in zip(features, feature_sizes):
+                if feature == "spectrogram":
+                    if feature_size:
+                        spectro_name += feature_size
+            spectro_path = os.path.join(save, spectro_name + ".pkl")
+
+        flac_paths = []
+        transcriptions = []
+        ids = []
 
         for folder_path in self._folder_paths:
             data = flacpath_transcription_id(folder_path, save=save_unified)
-            self._flac_paths += data['paths']
-            self._transcriptions += data['transcriptions']
-            self._ids += data['ids']
+            flac_paths += data['paths']
+            transcriptions += data['transcriptions']
+            ids += data['ids']
         
         if not feature_params:
-            feature_params = [None * len(features)]
+            feature_params = [None] * len(features)
 
         self._data = []
-        for i, feature, feature_size, params in zip(features, feature_sizes, feature_params):
+        for feature, feature_size, params in zip(features, feature_sizes, feature_params):
             if feature == "spectrogram":
-                self._data.append(audio.get_spectrograms(self._flac_paths,
-                                                         params=params,
-                                                         maximum_size=feature_size,
-                                                         save_path=save))
+                self._data.append(audio_util.get_spectrograms(flac_paths,
+                                                              params=params,
+                                                              maximum_size=feature_size,
+                                                              save_path=spectro_path))
             else:
                 raise NotImplementedError("Right now we only support spectrograms")
 

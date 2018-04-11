@@ -128,8 +128,8 @@ def butter_bandpass_filter(signal,
     Args:
         signal (np.array): The signal from the audio file
         samplerate (int): Sample rate of the audio file
-        lowcut (:obj:`int`, optional): Low frequency cut-off
-        highcut (:obj:`int`, optional): High frequency cut-off
+        lowcut (:obj:`int`, optional): Low frequency cut-off (Hz)
+        highcut (:obj:`int`, optional): High frequency cut-off (Hz)
         order (:obj:`int`, optional): Order of the butter bandpass
 
     Returns:
@@ -276,11 +276,10 @@ def stft_spectrogram(signal,
     spectrogram = np.abs(stft(windowed_signal,
                               real=real,
                               compute_onesided=True))
-    print (spectrogram.shape)
 
     if log:
         spectrogram /= spectrogram.max() # First normalize the volume
-        spectrogram = np.log10(spectrogram) # Apply log-transform
+        spectrogram = np.log10(spectrogram + np.finfo(float).eps) # Apply log-transform
         spectrogram[spectrogram < -thresh] = - thresh
     else:
         spectrogram[spectrogram < thresh] = thresh
@@ -406,67 +405,6 @@ def invert_stft_spectrogram(spectrogram,
         best = spectrogram * phase[:len(spectrogram)]
     signal = invert_util(best, frame_step, True, False)
     return np.real(signal)
-
-
-def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None):
-    """Get all spectrograms from audio files.
-
-    Given a list of audio files, return a 3D numpy array of shape 
-        (num_files, num_windows, window_size)
-
-    Args:
-        audio_files (list of str): all audio files
-        params (:obj:`SpectroGramParams`, optional): Used to specify
-            parameters for spectrogram generation.
-            If None is provided, then the default parameters are used.
-            Defaults to None.
-        maximum_size (:obj:`int`, optional): Used for zero-padding and/or
-            truncation. If None provided, then the maximum will be calculated
-            and everything will be zero-padded.
-            Defaults to None.
-        save_path (:obj:`str`, optional): Path to save the .npy file.
-            If None, then the file isn't saved.
-    """
-    if not params:
-        p = SpectroGramParams()
-    else:
-        p = params
-
-    if os.path.exists(save_path):
-        data = np.load(save_path)
-        return data
-
-    spectrograms = []
-    for path in audio_files:
-        spectro = get_spectrogram_from_path(path,
-                                            highcut=p.highcut,
-                                            lowcut=p.lowcut,
-                                            log=p.spectro_log,
-                                            thresh=p.spectro_thresh,
-                                            frame_size_in_ms=p.frame_size_in_ms,
-                                            frame_stride_in_ms=p.frame_stride_in_ms,
-                                            real=p.real)
-        spectrograms.append(spectro)
-    
-    if not maximum_size:
-        maximum_size = max(spectro.shape[0] for spectro in spectrograms) 
-
-    fixed_spectrograms = []
-    for spectro in spectrograms:
-        size = spectro.shape[0]
-
-        if size > maximum_size:
-            fixed_spectrograms.append(spectro[:maximum_size, :])
-        else:
-            pad_length = maximum_size - size
-            padded = np.pad(spectro, ((0, pad_length), (0,0)), 'constant')
-            fixed_spectrograms.append(padded)
-    
-    fixed_spectrograms = np.dstack(fixed_spectrograms)
-
-    if save_path:
-        np.save(save_path, fixed_spectrograms)
-    return fixed_spectrograms
 
 
 def frequency_to_mel(f):
