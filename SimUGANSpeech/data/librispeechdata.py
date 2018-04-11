@@ -1,17 +1,18 @@
 # -*- coding: utf-8 *-* 
-"""LibriSpeech Folder Parsing Module
+"""LibriSpeech Data Generator
+
+This module is used to provide a batch generator for 
+training our models.
+
+Todo:
+    * everything
+
 """
 
 import os
 import numpy as np
-import re
-
-
 import sys
-
 import tensorflow as tf
-
-import SimUGANSpeech.data.audio as audio
 
 FEATURES = [ 
              'spectrogram',
@@ -32,8 +33,6 @@ POSSIBLE_FOLDERS = [
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_MAX_TIME_STEPS = 50
 DEFAULT_MAX_OUTPUT_LENGTH = 50
-
-NUM_CHAR_FEATURES = 28 # 26 letters + 1 space + 1 EOF (represented as 0s)
 
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
@@ -89,6 +88,9 @@ class LibriSpeechBatchGenerator:
         self._folder_names = folder_names
         self._folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
         self._v = verbose
+
+
+
 
 
     def batch_generator(self):

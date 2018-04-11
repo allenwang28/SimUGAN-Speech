@@ -59,6 +59,7 @@ import urllib
 import pickle
 import tarfile
 import sys
+import re
 
 import argparse
 
@@ -67,6 +68,7 @@ import SimUGANSpeech.util.audio_util as audio_util
 from SimUGANSpeech.util.data_util import chunkify
 from SimUGANSpeech.definitions import LIBRISPEECH_DIR
 from SimUGANSpeech.data.librispeechdata import POSSIBLE_FOLDERS
+
 
 LIBRISPEECH_URL_BASE = "http://www.openslr.org/resources/12/{0}"
 
@@ -195,6 +197,8 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
     """
 
     if not os.path.exists(folder_dir):
+        if verbose:
+            print ("{0} doesn't exist. Making now.".format(folder_dir))
         os.makedirs(folder_dir)
 
     for fname in folder_names:
@@ -225,6 +229,7 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
 def librispeech_initialize(folder_dir,
                            folder_names,
                            num_chunks,
+                           percentage=1.0,
                            verbose=True):
     """Download LibriSpeech data, preprocess and save 
 
@@ -241,6 +246,9 @@ def librispeech_initialize(folder_dir,
     /path/to/dev-clean/ids-i.pkl
     /path/to/dev-clean/spectrograms.pkl
 
+    A master file is saved as well that specifies information about preprocessing.
+    This is saved to /path/to/dev-clean/master.pkl.
+
     Args:
         folder_dir (str): The path to LibriSpeech 
         folder_paths (list of str): List of the folder names
@@ -248,6 +256,9 @@ def librispeech_initialize(folder_dir,
         num_chunks (int): The number of chunks to split
             the data into per folder name. This is required
             since there is a lot of data.
+        percentage (:obj:`double`, optional): The percentage
+            of data to process. 0.0 means none, 1.0 means all.
+            Defaults to 1.0
         verbose (:obj:`bool`, optional): Whether or not to
             print statements. Defaults to True.
 
@@ -255,18 +266,46 @@ def librispeech_initialize(folder_dir,
 
     folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
     for fpath in folder_paths:
+        if verbose:
+            print ("Preprocessing {0}".format(fpath))
+        master_file_path = os.path.join(fpath, 'master.pkl')
+
         if not os.path.exists(fpath):
             raise ValueError("{0} does not exist. Make sure you download the data first.".format(fpath))
-        data = flacpath_transcription_id(fpath)
 
-        transcription_chunks = chunkify(data['transcriptions'], num_chunks)
-        id_chunks = chunkify(data['ids'], num_chunks)
-        path_chunks = chunkify(data['paths'], num_chunks)
-        
+        data = flacpath_transcription_id(fpath)
+        number_of_samples = int(percentage * len(data['ids']))
+
+        if verbose:
+            print ("In {0} there are {1} samples. {2} percentage selected, so {3} samples used.".format(fname, len(data['ids']), percentage, number_of_samples))
+
+        transcriptions = data['transcriptions'][:number_of_samples]
+        ids = data['ids'][:number_of_samples]
+        paths = data['paths'][:number_of_samples]
+
+        transcription_chunks = chunkify(transcriptions,num_chunks)
+        id_chunks = chunkify(ids, num_chunks)
+        path_chunks = chunkify(paths, num_chunks)
+
+        master = {}
+        master['num_chunks'] = num_chunks
+        master['percentage'] = percentage
+        master['num_samples'] = number_of_samples
+        master['transcription_paths'] = []
+        master['id_paths'] = []
+        master['spectrogram_paths']  = []
+
         for i in range(num_chunks):
+            if verbose:
+                print ("--------------------------")
+                print ("Processing chunk {0} of {1}".format(i+1, num_chunks))
             transcription_path = os.path.join(fpath, "transcription-{0}.pkl".format(i))
             id_path = os.path.join(fpath, "id-{0}.pkl".format(i))
             spectrograms_path = os.path.join(fpath, "spectrograms-{0}.pkl".format(i))
+
+            master['transcription_paths'].append(transcription_path)
+            master['id_paths'].append(id_path)
+            master['spectrogram_paths'].append(spectrograms_path)
 
             pickle.dump(transcription_chunks[i], open(transcription_path, 'wb'))
             pickle.dump(id_chunks[i], open(id_path, 'wb'))
@@ -277,36 +316,44 @@ def librispeech_initialize(folder_dir,
                                         maximum_size=None,
                                         save_path=spectrograms_path,
                                         verbose=verbose)
+        if verbose:
+            print ("Saving master file to {0}".format(master_file_path))
+        pickle.dump(master, open(master_file_path, 'wb'))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Script used to preprocess Librispeech data.")
 
     # Options to download and generate spectrograms
-    parser.add_argument("--download", default=True, type=bool,
+    parser.add_argument("--download", action='store_true',
                         help="Download if necessary")
-    parser.add_argument("--spectrograms", default=False, type=bool,
+    parser.add_argument("--spectrograms", action='store_true',
                         help="Generate spectrograms")
     parser.add_argument("--num_chunks", default=5, type=int,
                         help="Number of chunks to save to. Should be >1 to avoid MemoryError.")
+    parser.add_argument("--percentage", default=1.0, type=float,
+                        help="Between 0.0 and 1.0. Use this to only process a subset of the data.")
 
     # Options for which folders to use
     for folder in POSSIBLE_FOLDERS: 
-        parser.add_argument("--{0}".format(folder), default=False, type=bool,
-                            metavar=folder,
+        parser.add_argument("--{0}".format(folder), action='store_true',
                             help="Include {0}".format(folder))
 
-    parser.add_argument("--all", default=False, type=bool,
+    parser.add_argument("--all", action='store_true',
                         help="Include all possible folders")
 
     # Verbosity
-    parser.add_argument("--verbose", default=True, type=bool,
+    parser.add_argument("--verbose", action='store_true',
                         help="Verbosity")
 
     # Process Parameters
     args = parser.parse_args()
+    if args.percentage < 0.0 or args.percentage > 1.0:
+        raise ValueError("Percentage must be between 0 and 1")
+
     folder_dir = LIBRISPEECH_DIR
     folder_names = []
+
     if args.all:
         folder_names = POSSIBLE_FOLDERS
     else:
@@ -316,7 +363,13 @@ if __name__ == '__main__':
             if vars(args)[folder_key]:
                 folder_names.append(folder)
 
+    if args.verbose:
+        print ("Processing: ")
+        for fname in folder_names:
+            print ("- {0}".format(fname))
+
+
     if args.download:
         _maybe_download_and_extract(folder_dir, folder_names, args.verbose)
     if args.spectrograms:
-        librispeech_initialize(folder_path, folder_names, args.num_chunks, verbose=args.verbose)
+        librispeech_initialize(folder_dir, folder_names, args.num_chunks, percentage=args.percentage, verbose=args.verbose)
