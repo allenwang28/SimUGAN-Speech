@@ -14,6 +14,8 @@ import numpy as np
 import sys
 import tensorflow as tf
 
+import pickle
+
 FEATURES = [ 
              'spectrogram',
              'transcription',
@@ -84,13 +86,14 @@ class LibriSpeechBatchGenerator:
         if len(feature_sizes) != len(features):
             raise ValueError('Length of feature_sizes should match length of features')
 
-        self._folder_dir = folder_dir
-        self._folder_names = folder_names
-        self._folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
+        folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
         self._v = verbose
 
-
-
+        # Load the master file
+        self._master_files = {}
+        for fpath in folder_paths:
+            master_path = os.path.join(fpath, 'master.pkl')
+            master = pickle.load(open(master_path, 'rb'))
 
 
     def batch_generator(self):
