@@ -1,7 +1,22 @@
+# -*- coding: utf-8 *-* 
+"""Helper functions for audio operations
+
+This module is used to provide helper functions for any audio related
+operations. Included functions:
+    - get_spectrograms
+
+Notes:
+    - This module is different from the audio module in data, as this
+      module would work specifically on audio processing operations on 
+      files.
+
+Todo:
+
+"""
 import numpy as np
 import os
 
-import src.data.audio as audio
+import SimUGANSpeech.data.audio as audio
 import time
 
 from deco import concurrent, synchronized

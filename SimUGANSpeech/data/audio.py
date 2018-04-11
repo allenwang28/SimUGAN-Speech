@@ -9,7 +9,7 @@ Notes:
     - https://timsainb.github.io/spectrograms-mfccs-and-inversion-in-python.html
 
 Todo:
-    * better naming
+    * Make lowcut/highcut normalized by unit
     * sphinx.ext.todo
 """
 
@@ -93,8 +93,6 @@ def get_spectrogram_from_path(file_path,
                             frame_stride_in_ms=frame_stride_in_ms,
                             log=log,
                             thresh=thresh)
-
-
 
 
 def get_file_data(audio_file_path):

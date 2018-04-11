@@ -99,3 +99,13 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# don't upload data
+data/*
+
+# egg folder
+*.egg_info
+
+# VIM swap files
+*.swp
+
