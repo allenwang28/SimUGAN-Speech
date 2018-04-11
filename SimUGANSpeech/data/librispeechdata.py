@@ -12,8 +12,6 @@ import sys
 import tensorflow as tf
 
 import SimUGANSpeech.data.audio as audio
-import SimUGANSpeech.tools.audio_util as audio_util
-
 
 FEATURES = [ 
              'spectrogram',

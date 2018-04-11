@@ -60,11 +60,13 @@ import pickle
 import tarfile
 import sys
 
+import argparse
+
 import SimUGANSpeech.data.audio as audio
 import SimUGANSpeech.util.audio_util as audio_util
 from SimUGANSpeech.util.data_util import chunkify
-
 from SimUGANSpeech.definitions import LIBRISPEECH_DIR
+from SimUGANSpeech.data.librispeechdata import POSSIBLE_FOLDERS
 
 LIBRISPEECH_URL_BASE = "http://www.openslr.org/resources/12/{0}"
 
@@ -191,6 +193,10 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
         verbose (bool): Whether or not to progress
 
     """
+
+    if not os.path.exists(folder_dir):
+        os.makedirs(folder_dir)
+
     for fname in folder_names:
         if not os.path.exists(os.path.join(folder_dir, fname)):
             tar_file_name = fname + ".tar.gz"
@@ -246,10 +252,11 @@ def librispeech_initialize(folder_dir,
             print statements. Defaults to True.
 
     """
-    _maybe_download_and_extract(folder_dir, folder_names, verbose)
 
     folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
     for fpath in folder_paths:
+        if not os.path.exists(fpath):
+            raise ValueError("{0} does not exist. Make sure you download the data first.".format(fpath))
         data = flacpath_transcription_id(fpath)
 
         transcription_chunks = chunkify(data['transcriptions'], num_chunks)
@@ -273,10 +280,43 @@ def librispeech_initialize(folder_dir,
 
 
 if __name__ == '__main__':
-    # Parameters
-    folder_path = LIBRISPEECH_DIR
-    folder_names = [ 'dev-clean' ]
-    features = [ 'spectrogram' ]
+    parser = argparse.ArgumentParser()
 
-    librispeech_initialize(folder_path, folder_names, 10, verbose=True)
+    # Options to download and generate spectrograms
+    parser.add_argument("--download", default=True, type=bool,
+                        help="Download if necessary")
+    parser.add_argument("--spectrograms", default=False, type=bool,
+                        help="Generate spectrograms")
+    parser.add_argument("--num_chunks", default=5, type=int,
+                        help="Number of chunks to save to. Should be >1 to avoid MemoryError.")
 
+    # Options for which folders to use
+    for folder in POSSIBLE_FOLDERS: 
+        parser.add_argument("--{0}".format(folder), default=False, type=bool,
+                            metavar=folder,
+                            help="Include {0}".format(folder))
+
+    parser.add_argument("--all", default=False, type=bool,
+                        help="Include all possible folders")
+
+    # Verbosity
+    parser.add_argument("--verbose", default=True, type=bool,
+                        help="Verbosity")
+
+    # Process Parameters
+    args = parser.parse_args()
+    folder_dir = LIBRISPEECH_DIR
+    folder_names = []
+    if args.all:
+        folder_names = POSSIBLE_FOLDERS
+    else:
+        for folder in POSSIBLE_FOLDERS:
+            # Optional arguments mess up the folder names.
+            folder_key = folder.replace("-", "_") 
+            if vars(args)[folder_key]:
+                folder_names.append(folder)
+
+    if args.download:
+        _maybe_download_and_extract(folder_dir, folder_names, args.verbose)
+    if args.spectrograms:
+        librispeech_initialize(folder_path, folder_names, args.num_chunks, verbose=args.verbose)
