@@ -31,13 +31,6 @@ def chunkify(l, num_chunks):
     return np.array_split(l, num_chunks)
 
 
-if __name__ == "__main__":
-    list1 = list(range(10))
-    list2 = reversed(list(range(10)))
-
-    print (chunkify(list1, 2))
-
-
 
 
 

@@ -44,7 +44,7 @@ def get_spectrograms_from_path_cc(audio_files, params):
 
 
 @concurrent
-def pad_spectrogram(spectro, maximum_size):
+def pad_spectrogram_cc(spectro, maximum_size):
     """Utility function for concurrent padding of a spectrogram"""
     size = spectro.shape[0]
     if size > maximum_size:
@@ -55,16 +55,14 @@ def pad_spectrogram(spectro, maximum_size):
 
 
 @synchronized
-def pad_spectrograms(spectrograms, maximum_size):
+def pad_spectrograms_cc(spectrograms, maximum_size):
     """Utility function for synchronizing concurrent padding of spectrograms"""
     fixed_spectrograms = []
     for spectro in spectrograms:
-        fixed_spectrograms.append(pad_spectrogram(spectro, maximum_size))
+        fixed_spectrograms.append(pad_spectrogram_cc(spectro, maximum_size))
     return fixed_spectrograms
 
 
-# TODO - try looking at numpy again later.
-# Using pickle because we get a MemoryError 
 def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None, verbose=True):
     """Get all spectrograms from audio files.
 
@@ -112,7 +110,7 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
         if not maximum_size:
             maximum_size = max(spectro.shape[0] for spectro in spectrograms) 
 
-        spectrograms = pad_spectrograms(spectrograms, maximum_size)
+        spectrograms = pad_spectrograms_cc(spectrograms, maximum_size)
 
         if verbose:
             end = time.time()

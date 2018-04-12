@@ -36,6 +36,9 @@ DEFAULT_BATCH_SIZE = 10
 DEFAULT_MAX_TIME_STEPS = 50
 DEFAULT_MAX_OUTPUT_LENGTH = 50
 
+DEFAULT_CHUNK_PROCESS_PERCENTAGE = 0.2
+DEFAULT_BUFFER_SIZE = 1000
+
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
 
@@ -46,9 +49,7 @@ class LibriSpeechBatchGenerator:
                  folder_names,
                  features,
                  feature_sizes,
-                 feature_params=None,
                  batch_size=DEFAULT_BATCH_SIZE,
-                 randomize=True,
                  verbose=True):
         """LibriSpeechBatchGenerator class initializer
         
@@ -62,16 +63,8 @@ class LibriSpeechBatchGenerator:
                 Has to be the same shape as features. The features will be
                 truncated or padded to match the specified shape.
                 If no maximum/truncation desired, just provide None
-            feature_params (:obj:`list of objects`, optional): A list of 
-                feature parameters. If None provided, all features will
-                use default parameters.
-                Otherwise, feature_params should have the same shape as features.
-                An entry of None will use default parameters.
-                Defaults to None
             batch_size (:obj:`int`, optional): The desired batch size.
                 Defaults to 10
-            randomize (:obj:`bool`', optional): Whether or not to randomize data
-                in batch generation. Defaults to True.
             verbose (:obj:`bool`, optional): Whether or not to print statements.
                 Defaults to True.
         
@@ -85,19 +78,67 @@ class LibriSpeechBatchGenerator:
 
         if len(feature_sizes) != len(features):
             raise ValueError('Length of feature_sizes should match length of features')
+        self._verbose = verbose
 
-        folder_paths = [os.path.join(folder_dir, fname) for fname in folder_names]
-        self._v = verbose
+        spectro_paths = []
+        transcription_paths = []
+        id_paths = []
+        self._num_chunks = 0
+        self._total_samples = 0
+        self._max_spectro_feature_length = 0
 
-        # Load the master file
-        self._master_files = {}
-        for fpath in folder_paths:
+        # Load the master files
+        for fname in folder_names:
+            fpath = os.path.join(folder_dir, fname)
             master_path = os.path.join(fpath, 'master.pkl')
-            master = pickle.load(open(master_path, 'rb'))
+            try:
+                master = pickle.load(open(master_path, 'rb'))
+            except:
+                raise RuntimeError("""
+                    There was a problem with loading the master file, {0}.\n
+                    Make sure librispeech_initialize.py is run in /scripts
+                """.format(master_path)) 
+            spectro_paths += master['spectrogram_paths']
+            transcription_paths += master['transcription_paths']
+            id_paths += master['id_paths']
+            self._num_chunks += master['num_chunks']
+            self._total_samples += master['num_samples']
+            self._max_spectro_feature_length = max(self._max_spectro_feature_length,
+                                                   master['max_spectro_feature_length'])
+       
+        file_lists = {
+                        'spectrogram':   spectro_paths, 
+                        'transcription': transcription_paths,
+                        'id':            id_paths
+                     }
+
+        keep_lists = []
+        for feature in features:
+            keep_lists.append(file_lists[feature])
+
+        self._all_paths = list(zip(keep_lists))
 
 
     def batch_generator(self):
-        pass
+        """Generator that randomly yields features
+
+        Batch generator that yields features specified during initialization.
+        See Notes for more details about implementation.
+
+        Notes:
+            All of our data is split up into chunks, meaning we have to 
+            do a lot of processing to randomly sample.
+            
+            For a single epoch, the gist of it is this:
+            1. Randomly load N chunks, call these C 
+            2. Randomly sample from C
+            3. When all samples are exhausted (C is empty, or has 
+               less samples than batch size), go back to 1
+
+        """
+        pass 
+        # Load up N chunks
+        #N = DEFAULT_CHUNK_PROCESS_PERCENTAGE * 
 
 
 
