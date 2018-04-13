@@ -10,7 +10,7 @@ Todo:
 
 """
 import numpy as np
-
+import copy
 
 def chunkify(l, num_chunks):
     """Break a list into N different lists of equal size
@@ -31,7 +31,25 @@ def chunkify(l, num_chunks):
     return np.array_split(l, num_chunks)
 
 
+def randomly_sample_stack(stack, N):
+    """Randomly sample N elements without replacement
 
+    Args:
+        stack (list): The list of elements
+        N (int): The number of elements to sample
 
+    Returns:
+        list: list of N elements
 
+    Notes:
+        If N > num elements in stack, then we return
+        whatever is left in the stack
 
+    """
+    np.random.shuffle(stack)
+    if len(stack) > N:
+        return [stack.pop() for i in range(N)] 
+    else:
+        res = copy.deepcopy(stack)
+        stack[:] = [] # Empty the stack by reference
+        return res 

@@ -30,4 +30,14 @@ if __name__ == "__main__":
                                     feature_sizes,
                                     batch_size=batch_size,
                                     verbose=verbose)
-    print (lsg._all_paths)
+
+    bg = lsg.batch_generator()
+
+    for i in range(3):
+        spectrograms = next(bg)
+        print (len(spectrograms))
+        print (type(spectrograms))
+        print (type(spectrograms[0]))
+        print (type(spectrograms[0][0]))
+        print (spectrograms[0][0][0].shape)
+
