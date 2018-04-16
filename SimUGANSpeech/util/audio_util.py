@@ -37,10 +37,11 @@ def get_spectrogram_from_path_cc(path, params):
 @synchronized
 def get_spectrograms_from_path_cc(audio_files, params):
     """Utility function for synchronizing concurrent spectrogram from paths"""
-    spectrograms = []
+    # Use a dictionary - concurrent processing does not preserve order
+    spectrograms = {}
     for path in audio_files:
-        spectrograms.append(get_spectrogram_from_path_cc(path, params))
-    return spectrograms
+        spectrograms[path] = get_spectrogram_from_path_cc(path, params)
+    return [spectrograms[path] for path in audio_files] 
 
 
 @concurrent
@@ -55,12 +56,13 @@ def pad_spectrogram_cc(spectro, maximum_size):
 
 
 @synchronized
-def pad_spectrograms_cc(spectrograms, maximum_size):
+def pad_spectrograms_cc(spectrograms, audio_files, maximum_size):
     """Utility function for synchronizing concurrent padding of spectrograms"""
-    fixed_spectrograms = []
-    for spectro in spectrograms:
-        fixed_spectrograms.append(pad_spectrogram_cc(spectro, maximum_size))
-    return fixed_spectrograms
+    # Use a dictionary - concurrent processing does not preserve order
+    fixed_spectrograms = {}
+    for spectro, path in zip(spectrograms, audio_files):
+        fixed_spectrograms[path] = pad_spectrogram_cc(spectro, maximum_size)
+    return [fixed_spectrograms[path] for path in audio_files]
 
 
 def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None, verbose=True):
@@ -110,7 +112,7 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
         if not maximum_size:
             maximum_size = max(spectro.shape[0] for spectro in spectrograms) 
 
-        spectrograms = pad_spectrograms_cc(spectrograms, maximum_size)
+        spectrograms = pad_spectrograms_cc(spectrograms, audio_files, maximum_size)
 
         if verbose:
             end = time.time()
