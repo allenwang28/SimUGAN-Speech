@@ -25,6 +25,7 @@ import pickle
 @concurrent 
 def get_spectrogram_from_path_cc(path, params):
     """Utility function for concurrent spectrogram from path"""
+    print (path)
     return audio.get_spectrogram_from_path(path,
                                            highcut=params.highcut,
                                            lowcut=params.lowcut,

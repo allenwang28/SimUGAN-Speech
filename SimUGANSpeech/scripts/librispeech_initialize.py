@@ -257,7 +257,7 @@ def librispeech_initialize(folder_dir,
         fpath = os.path.join(folder_dir, fname)
 
         if verbose:
-            print ("Preprocessing {0}".format(fpath))
+            print ("Processing {0}".format(fpath))
         master_file_path = os.path.join(fpath, 'master.pkl')
 
         if not os.path.exists(fpath):
@@ -284,6 +284,8 @@ def librispeech_initialize(folder_dir,
         master['transcription_paths'] = []
         master['id_paths'] = []
         master['spectrogram_paths']  = []
+        master['max_spectro_feature_length'] = 0
+        msfl = 0
 
         for i in range(num_chunks):
             if verbose:
@@ -306,9 +308,10 @@ def librispeech_initialize(folder_dir,
                                             maximum_size=None,
                                             save_path=spectrograms_path,
                                             verbose=verbose)
+            msfl = max(msfl, s[0].shape[0])
         if verbose:
             print ("Saving master file to {0}".format(master_file_path))
-        master['max_spectro_feature_length'] = s[0].shape[0]
+        master['max_spectro_feature_length'] = msfl
         pickle.dump(master, open(master_file_path, 'wb'))
 
 
@@ -380,6 +383,6 @@ if __name__ == '__main__':
             print ("Completed cleaning process.")
     if args.download:
         _maybe_download_and_extract(folder_dir, folder_names, args.verbose)
-    if args.spectrograms:
+    if args.process:
         librispeech_initialize(folder_dir, folder_names, save_dir, args.num_chunks, percentage=args.percentage, verbose=args.verbose)
 
