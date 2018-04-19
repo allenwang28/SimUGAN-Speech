@@ -63,7 +63,6 @@ import re
 
 import argparse
 
-import SimUGANSpeech.data.audio as audio
 import SimUGANSpeech.util.audio_util as audio_util
 from SimUGANSpeech.util.data_util import chunkify
 from SimUGANSpeech.definitions import LIBRISPEECH_DIR

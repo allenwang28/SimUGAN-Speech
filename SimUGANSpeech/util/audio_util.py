@@ -16,7 +16,7 @@ Todo:
 import numpy as np
 import os
 
-import SimUGANSpeech.data.audio as audio
+import SimUGANSpeech.preprocessing.audio as audio
 import time
 
 from deco import concurrent, synchronized
