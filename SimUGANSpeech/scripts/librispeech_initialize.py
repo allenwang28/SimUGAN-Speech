@@ -318,8 +318,8 @@ if __name__ == '__main__':
     # Options to download and generate spectrograms
     parser.add_argument("--download", action='store_true',
                         help="Download if necessary")
-    parser.add_argument("--spectrograms", action='store_true',
-                        help="Generate spectrograms")
+    parser.add_argument("--process", action='store_true',
+                        help="Process all LibriSpeech data")
     parser.add_argument("--clean", action='store_true',
                         help="Delete all existing processed data (but don't delete LibriSpeech folder)")
     parser.add_argument("--num_chunks", default=5, type=int,
