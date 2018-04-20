@@ -30,8 +30,8 @@ POSSIBLE_FOLDERS = [
                      'dev-other',
                      'test-clean',
                      'test-other',
-                     'test-clean-100',
-                     'test-clean-360',
+                     'train-clean-100',
+                     'train-clean-360',
                      'train-other-500',
                    ]
 

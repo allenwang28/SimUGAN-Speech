@@ -199,6 +199,7 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
                 print ("{0} not found. Downloading {1}".format(fname, tar_file_name))
 
             if verbose:
+                print (url)
                 file_path, _ = urllib.request.urlretrieve(url=url,
                                                           filename=tar_file_path,
                                                           reporthook=_print_download_progress)
@@ -207,7 +208,7 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
             else:
                 file_path, _ = urllib.request.urlretrieve(url=url,
                                                           filename=tar_file_path)
-            tarfile.open(name=tar_file_path, mode="r:gz").extractall(folder_dir)
+            tarfile.open(name=tar_file_path, mode="r:gz").extractall(os.path.join(folder_dir, '..'))
         else:
             if verbose:
                 print ("{0} found. Skipping...".format(fname))

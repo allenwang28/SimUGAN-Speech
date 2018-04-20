@@ -18,21 +18,22 @@ Issues:
 
 """
 import os
-from gtts import gTTS
+import tts.sapi
 import pickle
 import time
 import sys
 import shutil
+import numpy as np
 
 import argparse
-
-from subprocess import call
 
 from SimUGANSpeech.definitions import SYNTHETIC_DIR
 from SimUGANSpeech.definitions import LIBRISPEECH_DIR 
 from SimUGANSpeech.data.librispeechdata import POSSIBLE_FOLDERS
 from SimUGANSpeech.util.data_util import chunkify
 import SimUGANSpeech.util.audio_util as audio_util
+
+from deco import concurrent, synchronized
 
 def get_librispeech_texts(folder_paths):
     """Get all transcriptions from any saved LibriSpeech data
@@ -72,39 +73,35 @@ def get_librispeech_texts(folder_paths):
 
     return transcriptions
 
-
-def generate_speech(text, save_path, slow):
+def generate_speech(voice, text, save_path):
     """Generate and save a synthetic tts sample 
 
     Notes:
-        Uses google's tts API (gTTS)
-
-        Can explore other options, but gTTS seems convenient and simple
-
+        Uses a SAPI wrapper (meaning that this is only available on windows)
 
     Args:
         text (str): The text to be spoken
         save_path (str): Path to save the sample to
-        slow (bool): Whether or not to have the voice speak slowly
 
     """
-    tts = gTTS(text=text, lang='en', slow=slow)
-    mp3_save = os.path.join(save_path, ".mp3")
-    tts.save(mp3_save)
-    call(["ffmpeg", "-i", mp3_save, save_path])
-    os.remove(mp3_save)
+    voice.create_recording(save_path, text)
 
 
-def generate_speech_from_texts(save_dir, texts, slow, verbose=True): 
+def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True): 
     """Generate and save speech samples from a list of text
 
-    Notes:
-        If len(texts) = N, then the samples created will be:
+    Since we use SAPI, we have to specify the voice as well.
+    We will generate a sample from every available voice.
 
-        save_dir/0.flac
-        save_dir/1.flac
+    Notes:
+        If len(texts) = N and there are two possible voices,
+        then the samples created will be:
+
+        save_dir/0-v0.flac
+        save_dir/0-v1.flac
+        save_dir/1-v0.flac
+        save_dir/1-v1.flac
         ...
-        sav_dir/N-1.flac
 
         Further, a file_map object will be saved that maps
         each .flac file to their respective transcription. 
@@ -116,11 +113,17 @@ def generate_speech_from_texts(save_dir, texts, slow, verbose=True):
         save_dir (str): Path to save samples to
         texts (list of str): The list of texts to generate
             speech samples.
-        slow (bool): Whether or not to have the voice speak slowly
+        percentage (:obj:`float`, optional): The percent of 
+            samples to process. Defaults to 1.0
         verbose (:obj:`bool`, optional): verbosity. Defaults to True
 
     """
     file_map = {}
+
+    voice = tts.sapi.Sapi()
+
+    num_to_process = int(np.ceil(percentage * len(texts)))
+    texts = texts[:num_to_process]
 
     if not os.path.exists(save_dir):
         if verbose:
@@ -131,15 +134,18 @@ def generate_speech_from_texts(save_dir, texts, slow, verbose=True):
         print ("Provided {0} samples".format(len(texts)))
         start = time.time()
 
-    for i, text in enumerate(texts):
-        if verbose:
-            pct_complete = i / len(texts)
-            msg = "\r- Generation progress: {0:.1%}".format(pct_complete)
-            sys.stdout.write(msg)
-            sys.stdout.flush()
-        sample_save_path = os.path.join(save_dir, '{0}.flac'.format(i))
-        generate_speech(text, sample_save_path, slow)
-        file_map[sample_save_path] = text 
+    for j, vname in enumerate(voice.get_voice_names()):
+        voice.set_voice(vname)
+        for i, text in enumerate(texts):
+            if verbose:
+                pct_complete = ((j+1) * (i+1)) / (len(voice.get_voice_names())*len(texts))
+                msg = "\r- Generation progress: {0:.1%}".format(pct_complete)
+                sys.stdout.write(msg)
+                sys.stdout.flush()
+
+            sample_save_path = os.path.join(save_dir, '{0}-v{1}.flac'.format(i,j))
+            generate_speech(voice, text, sample_save_path)
+            file_map[sample_save_path] = text 
 
     file_map_path = os.path.join(save_dir, 'file_map.pkl')
 
@@ -224,8 +230,8 @@ if __name__ == "__main__":
                         help="Delete all existing processed data (but don't delete LibriSpeech folder)")
     parser.add_argument("--num_chunks", default=5, type=int,
                         help="Number of chunks to save to. Should be >1 to avoid MemoryError.")
-    parser.add_argument("--slow", action='store_true',
-                        help="Whether or not the speaker should speak slowly.")
+    parser.add_argument("--percentage", default=1.0, type=float,
+                        help="Between 0.0 and 1.0. Use this to only process a subset of the data.")
 
     # Options for which folders to use
     for folder in POSSIBLE_FOLDERS: 
@@ -241,6 +247,9 @@ if __name__ == "__main__":
 
     # Process Parameters
     args = parser.parse_args()
+
+    if args.percentage < 0.0 or args.percentage > 1.0:
+        raise ValueError("Percentage must be between 0 and 1")
 
     folder_dir = LIBRISPEECH_DIR
     folder_names = []
@@ -275,7 +284,7 @@ if __name__ == "__main__":
 
     if args.generate:
         transcriptions = get_librispeech_texts(folder_names)
-        generate_speech_from_texts(save_dir, transcriptions, args.slow, verbose=args.verbose)
+        generate_speech_from_texts(save_dir, transcriptions, percentage=args.percentage, verbose=args.verbose)
     if args.process:
         process_synthetic_data(save_dir, args.num_chunks, verbose=args.verbose)
 
