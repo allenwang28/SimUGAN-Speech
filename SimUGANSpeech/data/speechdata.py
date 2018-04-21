@@ -16,6 +16,8 @@ import os
 import numpy as np
 import sys
 
+import time
+
 import pickle
 import copy
 
@@ -89,6 +91,11 @@ class SpeechBatchGenerator(object):
         self._total_samples = 0
         self._max_spectro_feature_length = 0
 
+        if self._verbose:
+            print ("Loading the master file...")
+            s = time.time()
+
+
         # Load the master files
         for fname in folder_names:
             fpath = os.path.join(folder_dir, fname)
@@ -107,7 +114,9 @@ class SpeechBatchGenerator(object):
             self._total_samples += master['num_samples']
             self._max_spectro_feature_length = max(self._max_spectro_feature_length,
                                                    master['max_spectro_feature_length'])
-       
+        if self._verbose:
+            print ("Finished loading the master file in {0} seconds.".format(time.time() - s))
+
         file_lists = {
                         'spectrogram':   spectro_paths, 
                         'transcription': transcription_paths,
@@ -143,6 +152,9 @@ class SpeechBatchGenerator(object):
         self.num_epochs = 0
         N = int(np.ceil(self._chunk_pct * self._num_chunks))
 
+        if self._verbose:
+            print ("Loading {0} files at once.".format(N))
+
         data = []
         while True:
             self.num_epochs += 1
@@ -151,14 +163,19 @@ class SpeechBatchGenerator(object):
                 # Load up N chunks
                 file_queue = randomly_sample_stack(remaining_chunks, N)
 
-                feature_buffer = []
+                if self._verbose:
+                    s = time.time()
+                    print ("Loading chunks...")
+
                 for feature_file_tuple in file_queue:
                     feature_file_data = []
                     for feature_file in feature_file_tuple:
                         feature_file_data.append(pickle.load(open(feature_file, 'rb')))
-                    feature_buffer.append(feature_file_data)
+                    data += list(zip(*feature_file_data))
 
-                data += list(zip(*feature_buffer))
+                if self._verbose:
+                    print ("Finished loading chunks in {0}".format(time.time() - s))
+
                 # TODO - pad/truncate the data
                 while len(data) > self._batch_size:
                     # Note: If batch size > remaining elements, we just load the next chunk
