@@ -40,7 +40,7 @@ class SyntheticSpeechBatchGenerator(SpeechBatchGenerator):
                 Defaults to True.
         
         """
-        super().__init__(LIBRISPEECH_DIR,
+        super().__init__(SYNTHETIC_DIR,
                          ['.'],
                          features,
                          feature_sizes,

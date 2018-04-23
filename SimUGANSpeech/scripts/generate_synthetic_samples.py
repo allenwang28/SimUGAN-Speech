@@ -2,28 +2,25 @@
 """Script used for generating synthetic samples
 
 Notes:
-    gTTS can only save into mp3 files. Soundfile (which
-    our audio module uses to open files) only accepts
-    .wav or .flac files.
+    We use the SAPI python interface from 
+    https://github.com/DeepHorizons/tts
 
-    Therefore we need to convert these .mp3 to
-    .flac files, which we'll (hackily) do using ffmpeg
+    This means that generation is only supported on Windows machines.
 
-    Install here:
-    https://github.com/adaptlearning/adapt_authoring/wiki/Installing-FFmpeg
+    A lot of the issues are due to existing Python TTS systems not 
 
-Issues:
-    It seems that gTTS only provides one voice. This can be
-    a problem if we decide to try other voices later.
+TODO:
 
 """
 import os
-import tts.sapi
+import tts.sapi # this import is only used when generating the samples
 import pickle
 import time
 import sys
 import shutil
 import numpy as np
+
+import re
 
 import argparse
 
@@ -134,18 +131,22 @@ def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True):
         print ("Provided {0} samples".format(len(texts)))
         start = time.time()
 
+    num_voices = len(voice.get_voice_names())
+    total_generated = num_voices * len(texts)
+
     for j, vname in enumerate(voice.get_voice_names()):
         voice.set_voice(vname)
         for i, text in enumerate(texts):
             if verbose:
-                pct_complete = ((j+1) * (i+1)) / (len(voice.get_voice_names())*len(texts))
+                pct_complete = (j * total_generated + i) / total_generated
                 msg = "\r- Generation progress: {0:.1%}".format(pct_complete)
                 sys.stdout.write(msg)
                 sys.stdout.flush()
 
-            sample_save_path = os.path.join(save_dir, '{0}-v{1}.flac'.format(i,j))
+            save_name = '{0}-v{1}.flac'.format(i, j)
+            sample_save_path = os.path.join(save_dir, save_name)
             generate_speech(voice, text, sample_save_path)
-            file_map[sample_save_path] = text 
+            file_map[save_name] = text 
 
     file_map_path = os.path.join(save_dir, 'file_map.pkl')
 
@@ -183,11 +184,13 @@ def process_synthetic_data(save_dir, num_chunks, verbose=True):
     all_files = list(file_map.keys())
 
     file_chunks = chunkify(all_files, num_chunks)
+
     master = {}
     master['num_chunks'] = num_chunks
     master['num_samples'] = len(all_files)
     master['transcription_paths'] = []
     master['spectrogram_paths']  = []
+    master['id_paths'] = []
     msfl = 0
 
     for i in range(num_chunks):
@@ -195,15 +198,20 @@ def process_synthetic_data(save_dir, num_chunks, verbose=True):
             print ("--------------------------")
             print ("Processing chunk {0} of {1}".format(i+1, num_chunks))
         file_chunk = file_chunks[i]
+        file_chunk_correct = [os.path.join(SYNTHETIC_DIR, f) for f in file_chunk]
         transcription_path = os.path.join(save_dir, 'transcription-{0}.pkl'.format(i))
         spectrogram_path = os.path.join(save_dir, 'spectrograms-{0}.pkl'.format(i))
+        id_path = os.path.join(save_dir, 'ids-{0}.pkl'.format(i))
 
         master['transcription_paths'].append(transcription_path)
         master['spectrogram_paths'].append(spectrogram_path)
+        master['id_paths'].append(id_path)
 
         pickle.dump([file_map[f] for f in file_chunk], open(transcription_path, 'wb'))
+        id_regex = re.compile(r'v[0-9]+')
+        pickle.dump([int(id_regex.findall(f)[0][1:]) for f in file_chunk], open(id_path, 'wb'))
 
-        s = audio_util.get_spectrograms(file_chunk,
+        s = audio_util.get_spectrograms(file_chunk_correct,
                                         params=None,
                                         maximum_size=None,
                                         save_path=spectrogram_path,
