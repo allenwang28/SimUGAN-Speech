@@ -17,6 +17,7 @@ import numpy as np
 import os
 
 import SimUGANSpeech.preprocessing.audio as audio
+from SimUGANSpeech.util.data_util import pad_or_truncate
 import time
 
 from deco import concurrent, synchronized
@@ -112,7 +113,8 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
         if not maximum_size:
             maximum_size = max(spectro.shape[0] for spectro in spectrograms) 
 
-        spectrograms = pad_spectrograms_cc(spectrograms, audio_files, maximum_size)
+        #spectrograms = pad_spectrograms_cc(spectrograms, audio_files, maximum_size)
+        spectrograms = pad_or_truncate(spectrograms, maximum_size)
 
         if verbose:
             end = time.time()

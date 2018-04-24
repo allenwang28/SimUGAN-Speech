@@ -21,7 +21,7 @@ import time
 import pickle
 import copy
 
-from SimUGANSpeech.util.data_util import randomly_sample_stack
+from SimUGANSpeech.util.data_util import randomly_sample_stack, pad_or_truncate
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_MAX_TIME_STEPS = 50
@@ -76,7 +76,6 @@ class SpeechBatchGenerator(object):
             if feature not in FEATURES: 
                 raise ValueError('Invalid feature')
         self._features = features
-        self._feature_sizes = feature_sizes
         self._batch_size = batch_size
         self._chunk_pct = chunk_pct
 
@@ -90,6 +89,7 @@ class SpeechBatchGenerator(object):
         self._num_chunks = 0
         self._total_samples = 0
         self._max_spectro_feature_length = 0
+        self._max_text_length = 0
 
         if self._verbose:
             print ("Loading the master file...")
@@ -114,6 +114,19 @@ class SpeechBatchGenerator(object):
             self._total_samples += master['num_samples']
             self._max_spectro_feature_length = max(self._max_spectro_feature_length,
                                                    master['max_spectro_feature_length'])
+            self._max_text_length = max(self._max_text_length, master['max_text_length'])
+
+        # If the specified spectrogram feature size not provided, set it to the max
+        for i, feature in enumerate(features):
+            if feature == "spectrogram":
+                if not feature_sizes[i]:
+                    feature_sizes[i] = self._max_spectro_feature_length
+            elif feature == "transcription":
+                if not feature_sizes[i]:
+                    feature_sizes[i] = self._max_text_length
+
+        self._feature_sizes = feature_sizes
+
         if self._verbose:
             print ("Finished loading the master file in {0} seconds.".format(time.time() - s))
 
@@ -146,7 +159,7 @@ class SpeechBatchGenerator(object):
                less samples than batch size), go back to 1
 
         Yields:
-            list of tuples
+            list of lists: Shape = (num_features, batch_size)
 
         """
         self.num_epochs = 0
@@ -169,16 +182,17 @@ class SpeechBatchGenerator(object):
 
                 for feature_file_tuple in file_queue:
                     feature_file_data = []
-                    for feature_file in feature_file_tuple:
-                        feature_file_data.append(pickle.load(open(feature_file, 'rb')))
+                    for feature_size, feature_file in zip(self._feature_sizes, feature_file_tuple):
+                        fd = pickle.load(open(feature_file, 'rb'))
+                        fd = pad_or_truncate(fd, feature_size)
+                        feature_file_data.append(fd)
                     data += list(zip(*feature_file_data))
 
                 if self._verbose:
                     print ("Finished loading chunks in {0}".format(time.time() - s))
 
-                # TODO - pad/truncate the data
                 while len(data) > self._batch_size:
                     # Note: If batch size > remaining elements, we just load the next chunk
                     batch = randomly_sample_stack(data, self._batch_size)
-                    yield batch
+                    yield list(map(list, zip(*batch)))
 

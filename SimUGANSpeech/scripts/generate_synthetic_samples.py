@@ -133,12 +133,13 @@ def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True):
 
     num_voices = len(voice.get_voice_names())
     total_generated = num_voices * len(texts)
+    num_samples = len(texts)
 
     for j, vname in enumerate(voice.get_voice_names()):
         voice.set_voice(vname)
         for i, text in enumerate(texts):
             if verbose:
-                pct_complete = (j * total_generated + i) / total_generated
+                pct_complete = (j * num_samples + i) / total_generated
                 msg = "\r- Generation progress: {0:.1%}".format(pct_complete)
                 sys.stdout.write(msg)
                 sys.stdout.flush()
@@ -220,6 +221,7 @@ def process_synthetic_data(save_dir, num_chunks, verbose=True):
     if verbose:
         print ("Saving master file to {0}".format(master_file_path))
     master['max_spectro_feature_length'] = msfl
+    master['max_text_length'] = len(max(file_map.items(), key=len))
     pickle.dump(master, open(master_file_path, 'wb'))
 
 
@@ -229,7 +231,7 @@ if __name__ == "__main__":
     # Arg parse...
     parser = argparse.ArgumentParser(description="Script used to generate and preprocess synthesized data.")
 
-    # Options to download and generate spectrograms
+    # Options to generate samples and generate spectrograms
     parser.add_argument("--generate", action='store_true',
                         help="Generate speech samples")
     parser.add_argument("--process", action='store_true',

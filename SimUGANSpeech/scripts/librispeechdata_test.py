@@ -15,14 +15,14 @@ if __name__ == "__main__":
                ]
 
     feature_sizes = [
-                      None, # Pad or truncate to only 2000
+                      500, 
                     ]
 
     batch_size = 1
     verbose = True
 
     chunk_pct=0.3
-    num_iterations = 10
+    num_iterations = 3
 
     lsg = LibriSpeechBatchGenerator(folder_names,
                                     features,
@@ -35,10 +35,11 @@ if __name__ == "__main__":
 
     for i in range(num_iterations):
         batch = next(bg)
-        assert (len(batch) == batch_size)
+        assert (len(batch) == len(features))
+        assert (len(batch[0]) == batch_size)
 
-        first_sample = batch[0]
-        first_spectrogram = first_sample[0]
+        spectrograms = batch[0]
+        first_spectrogram = spectrograms[0]
 
         print (first_spectrogram.shape)
 

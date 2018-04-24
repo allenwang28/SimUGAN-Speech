@@ -286,6 +286,7 @@ def librispeech_initialize(folder_dir,
         master['id_paths'] = []
         master['spectrogram_paths']  = []
         master['max_spectro_feature_length'] = 0
+        master['max_text_length'] = len(max(transcriptions, key=len))
         msfl = 0
 
         for i in range(num_chunks):
@@ -374,12 +375,13 @@ if __name__ == '__main__':
             print ("Files being deleted:")
         for fname in folder_names:
             fpath = os.path.join(save_dir, fname)
-            pkl_files = [os.path.join(save_dir, fname, f) for f in os.listdir(fpath) if f.endswith(".pkl")]
+            if os.path.exists(fpath):
+                pkl_files = [os.path.join(save_dir, fname, f) for f in os.listdir(fpath) if f.endswith(".pkl")]
 
-            for f in pkl_files:
-                if args.verbose:
-                    print ("{0}".format(f))
-                os.remove(f)
+                for f in pkl_files:
+                    if args.verbose:
+                        print ("{0}".format(f))
+                    os.remove(f)
         if args.verbose:
             print ("Completed cleaning process.")
     if args.download:
