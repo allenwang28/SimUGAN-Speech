@@ -28,7 +28,9 @@ if __name__ == "__main__":
     num_epochs = 1
     chunk_pct = 0.2
 
-    input_shape = (batch_size, feature_sizes[0], 200)
+    #input_shape = (batch_size, feature_sizes[0], 200)
+    input_shape = (batch_size, 200, feature_sizes[0], 1)
+
     output_shape = (batch_size, feature_sizes[1], 26)
 
     lbg = LibriSpeechBatchGenerator(folder_names,
@@ -46,7 +48,7 @@ if __name__ == "__main__":
 
     ds2.build_graph()
 
-    with tf.Session(graph=ds2.graph) as sess:
+    with tf.Session() as sess:
         while (lbg.epoch < num_epochs):
             spectrograms, transcriptions = next(bg)
             t_idx = [text_to_indices(trans) for trans in transcriptions]
