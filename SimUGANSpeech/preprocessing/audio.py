@@ -41,9 +41,10 @@ DEFAULT_FRAME_STRIDE_MS = 10
 DEFAULT_INVERT_ITER = 15
 
 DEFAULT_WINDOW_FUNCTION = None
+DEFAULT_MAX_TIME = None
 
 
-class SpectrogramParams(object):
+class AudioParams(object):
     """Helper class to specify spectrogram parameters"""
 
     def __init__(self):
@@ -62,6 +63,7 @@ class SpectrogramParams(object):
         self.frame_stride_in_ms = DEFAULT_FRAME_STRIDE_MS
         self.invert_iter = DEFAULT_INVERT_ITER
         self.window_function = DEFAULT_WINDOW_FUNCTION
+        self.max_time = DEFAULT_MAX_TIME 
 
 def get_spectrogram_from_path(file_path,
                               highcut=DEFAULT_HIGHCUT,
@@ -95,7 +97,7 @@ def get_spectrogram_from_path(file_path,
                             thresh=thresh)
 
 
-def get_file_data(audio_file_path):
+def get_file_data(audio_file_path, max_time=DEFAULT_MAX_TIME):
     """Get the signal and sample rate from a given audio file
 
     Gets the signal as an np.array and sample rate given an audio file path
@@ -105,6 +107,8 @@ def get_file_data(audio_file_path):
         audio_file_path (str): The path to the audio file.
             Supported file types:
                 - flac
+        max_time (:obj:`int`, optional): Max time (s) for the audio file
+            Defaults to None
 
     Returns:
         np.array : the data of the audio file 
@@ -113,6 +117,9 @@ def get_file_data(audio_file_path):
     """
     with open(audio_file_path, 'rb') as f:
         signal, samplerate = sf.read(f)
+    if max_time:
+        if np.shape(signal)[0]/float(samplerate) > max_time:
+            signal = signal[0:samplerate*max_time]
     return (signal, samplerate)
 
 

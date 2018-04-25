@@ -44,28 +44,6 @@ def get_spectrograms_from_path_cc(audio_files, params):
         spectrograms[path] = get_spectrogram_from_path_cc(path, params)
     return [spectrograms[path] for path in audio_files] 
 
-
-@concurrent
-def pad_spectrogram_cc(spectro, maximum_size):
-    """Utility function for concurrent padding of a spectrogram"""
-    size = spectro.shape[0]
-    if size > maximum_size:
-        return spectro[:maximum_size, :]
-    else:
-        pad_length = maximum_size - size
-        return np.pad(spectro, ((0, pad_length), (0,0)), 'constant')
-
-
-@synchronized
-def pad_spectrograms_cc(spectrograms, audio_files, maximum_size):
-    """Utility function for synchronizing concurrent padding of spectrograms"""
-    # Use a dictionary - concurrent processing does not preserve order
-    fixed_spectrograms = {}
-    for spectro, path in zip(spectrograms, audio_files):
-        fixed_spectrograms[path] = pad_spectrogram_cc(spectro, maximum_size)
-    return [fixed_spectrograms[path] for path in audio_files]
-
-
 def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None, verbose=True):
     """Get all spectrograms from audio files.
 
@@ -123,7 +101,8 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
         if save_path:
             if verbose:
                 print ("Saving spectrograms to {0}".format(save_path))
-            pickle.dump(spectrograms, open(save_path, 'wb'))
+            #pickle.dump(spectrograms, open(save_path, 'wb'))
+            np.save(open(save_path, 'wb'), spectrograms)
         return spectrograms
 
 

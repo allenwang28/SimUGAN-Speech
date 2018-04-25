@@ -57,7 +57,6 @@ import os
 
 import urllib
 import pickle
-import json
 import tarfile
 import sys
 import re
@@ -142,6 +141,8 @@ def flacpath_transcription_id(folder_path):
         dict: Contains flac files, transcriptions, and ids
 
     """
+    # Use pickle so we don't have to run this every time
+    pkl_path = os.path.join(folder_path, 'unified.pkl') 
     voice_txt_dict = _voice_txt_dict_from_path(folder_path)
     
     flac_files = []
@@ -179,7 +180,7 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
         folder_dir (str): The path to LibriSpeech 
         folder_paths (list of str): List of the folder names
             (e.g., dev-clean, dev-test, etc.)
-        verbose (bool): Whether or not to print progress
+        verbose (bool): Whether or not to progress
 
     """
 
@@ -210,27 +211,30 @@ def _maybe_download_and_extract(folder_dir, folder_names, verbose):
             tarfile.open(name=tar_file_path, mode="r:gz").extractall(os.path.join(folder_dir, '..'))
         else:
             if verbose:
-                print ("{0} found. Skipping download...".format(fname))
+                print ("{0} found. Skipping...".format(fname))
 
 
 
 def librispeech_initialize(folder_dir,
                            folder_names,
                            save_folder,
-                           verbose):
+                           num_chunks,
+                           percentage=1.0,
+                           verbose=True):
     """Download LibriSpeech data, preprocess and save 
 
-    For specified LibriSpeech datasets, extract:
+    For each LibriSpeech dataset, extract:
     - transcriptions
     - ids 
-    - flac paths
+    - spectrograms
+    into multiple chunks.
 
-    All of this is saved into a dict 
     Assuming we're processing dev-clean at /path/to/dev-clean, 
+    for batch i, these are saved as:
 
-    {save_folder}/dev-clean/transcriptions.pkl
-    {save_folder}/dev-clean/ids.pkl
-    {save_folder}/dev
+    {save_folder}/dev-clean/transcriptions-i.pkl
+    {save_folder}/dev-clean/ids-i.pkl
+    {save_folder}/dev-clean/spectrograms.pkl
 
     A master file is saved as well that specifies information about preprocessing.
     This is saved to /path/to/dev-clean/master.pkl.
@@ -240,26 +244,102 @@ def librispeech_initialize(folder_dir,
         folder_paths (list of str): List of the folder names
             (e.g., dev-clean, dev-test, etc.)
         save_folder (str): The path to the destination to save pkl data
-        verbose (bool): Whether or not to print progress
+        num_chunks (int): The number of chunks to split
+            the data into per folder name. This is required
+            since there is a lot of data.
+        percentage (:obj:`double`, optional): The percentage
+            of data to process. 0.0 means none, 1.0 means all.
+            Defaults to 1.0
+        verbose (:obj:`bool`, optional): Whether or not to
+            print statements. Defaults to True.
 
     """
     for fname in folder_names:
-        if verbose:
-            print ("Processing {0}".format(fname))
         fpath = os.path.join(folder_dir, fname)
+
+        if verbose:
+            print ("Processing {0}".format(fpath))
         master_file_path = os.path.join(fpath, 'master.pkl')
+
         if not os.path.exists(fpath):
             raise ValueError("{0} does not exist. Make sure you download the data first.".format(fpath))
+
         data = flacpath_transcription_id(fpath)
-        pickle.dump(data, open(master_file_path, 'wb'))
+        number_of_samples = int(percentage * len(data['ids']))
+
+        if verbose:
+            print ("In {0} there are {1} samples. {2} percentage selected, so {3} samples used.".format(fname, len(data['ids']), percentage, number_of_samples))
+
+        transcriptions = data['transcriptions'][:number_of_samples]
+        ids = data['ids'][:number_of_samples]
+        paths = data['paths'][:number_of_samples]
+
+        transcription_chunks = chunkify(transcriptions,num_chunks)
+        id_chunks = chunkify(ids, num_chunks)
+        path_chunks = chunkify(paths, num_chunks)
+
+        master = {}
+        master['num_chunks'] = num_chunks
+        master['percentage'] = percentage
+        master['num_samples'] = number_of_samples
+        master['transcription_paths'] = []
+        master['id_paths'] = []
+        master['spectrogram_paths']  = []
+        master['file_paths'] = []
+        master['max_spectro_feature_length'] = 0
+        master['max_text_length'] = len(max(transcriptions, key=len))
+        msfl = 0
+
+        for i in range(num_chunks):
+            if verbose:
+                print ("--------------------------")
+                print ("Processing chunk {0} of {1}".format(i+1, num_chunks))
+            transcription_path = os.path.join(save_folder, fname, "transcription-{0}.npy".format(i))
+            id_path = os.path.join(save_folder, fname, "id-{0}.npy".format(i))
+            spectrograms_path = os.path.join(save_folder, fname, "spectrograms-{0}.npy".format(i))
+            file_path = os.path.join(save_folder, fname, "files-{0}.npy".format(i))
+
+            master['transcription_paths'].append(transcription_path)
+            master['id_paths'].append(id_path)
+            master['spectrogram_paths'].append(spectrograms_path)
+            master['file_paths'].append(file_path)
+
+            np.save(open(transcription_path, 'wb'), transcription_chunks[i])
+            np.save(open(id_path, 'wb'), id_chunks[i])
+            np.save(open(file_path, 'wb'), path_chunks[i])
+            #pickle.dump(transcription_chunks[i], open(transcription_path, 'wb'))
+            #pickle.dump(id_chunks[i], open(id_path, 'wb'))
+
+            # This function will automatically save for us
+            """
+            s = audio_util.get_spectrograms(path_chunks[i],
+                                            params=None,
+                                            maximum_size=None,
+                                            save_path=spectrograms_path,
+                                            verbose=verbose)
+            msfl = max(msfl, s[0].shape[0])
+            """
+
+        if verbose:
+            print ("Saving master file to {0}".format(master_file_path))
+        master['max_spectro_feature_length'] = msfl
+        pickle.dump(master, open(master_file_path, 'wb'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Script used to preprocess Librispeech data.")
 
     # Options to download and generate spectrograms
+    parser.add_argument("--download", action='store_true',
+                        help="Download if necessary")
+    parser.add_argument("--process", action='store_true',
+                        help="Process all LibriSpeech data")
     parser.add_argument("--clean", action='store_true',
                         help="Delete all existing processed data (but don't delete LibriSpeech folder)")
+    parser.add_argument("--num_chunks", default=5, type=int,
+                        help="Number of chunks to save to. Should be >1 to avoid MemoryError.")
+    parser.add_argument("--percentage", default=1.0, type=float,
+                        help="Between 0.0 and 1.0. Use this to only process a subset of the data.")
 
     # Options for which folders to use
     for folder in POSSIBLE_FOLDERS: 
@@ -275,6 +355,8 @@ if __name__ == '__main__':
 
     # Process Parameters
     args = parser.parse_args()
+    if args.percentage < 0.0 or args.percentage > 1.0:
+        raise ValueError("Percentage must be between 0 and 1")
 
     folder_dir = LIBRISPEECH_DIR
     folder_names = []
@@ -304,19 +386,15 @@ if __name__ == '__main__':
             fpath = os.path.join(save_dir, fname)
             if os.path.exists(fpath):
                 pkl_files = [os.path.join(save_dir, fname, f) for f in os.listdir(fpath) if f.endswith(".pkl")]
+
                 for f in pkl_files:
                     if args.verbose:
                         print ("{0}".format(f))
                     os.remove(f)
         if args.verbose:
             print ("Completed cleaning process.")
+    if args.download:
+        _maybe_download_and_extract(folder_dir, folder_names, args.verbose)
+    if args.process:
+        librispeech_initialize(folder_dir, folder_names, save_dir, args.num_chunks, percentage=args.percentage, verbose=args.verbose)
 
-    if args.verbose:
-        print ("-----------------------------------")
-        print ("Downloading/extracting if necessary")
-    _maybe_download_and_extract(folder_dir, folder_names, args.verbose)
-
-    if args.verbose:
-        print ("-----------------------------------")
-        print ("Beginning initialization")
-    librispeech_initialize(folder_dir, folder_names, save_dir, args.verbose)

@@ -17,6 +17,7 @@ class SyntheticSpeechBatchGenerator(SpeechBatchGenerator):
     def __init__(self,
                  features,
                  feature_sizes,
+                 audio_params=None,
                  batch_size=DEFAULT_BATCH_SIZE,
                  chunk_pct=DEFAULT_CHUNK_PROCESS_PERCENTAGE,
                  verbose=True):
@@ -29,6 +30,9 @@ class SyntheticSpeechBatchGenerator(SpeechBatchGenerator):
                 Has to be the same shape as features. The features will be
                 truncated or padded to match the specified shape.
                 If no maximum/truncation desired, just provide None
+            audio_params (:obj:`AudioParameters`, optional): Parameters for audio
+                See /preprocessing/audio.py for more information.
+                Defaults to None
             batch_size (:obj:`int`, optional): The desired batch size.
                 Defaults to 10
             chunk_pct (:obj:`float`, optional): The percentage of chunks to
@@ -44,6 +48,7 @@ class SyntheticSpeechBatchGenerator(SpeechBatchGenerator):
                          ['.'],
                          features,
                          feature_sizes,
+                         audio_params,
                          batch_size,
                          chunk_pct,
                          verbose)

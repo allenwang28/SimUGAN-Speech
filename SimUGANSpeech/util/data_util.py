@@ -72,7 +72,6 @@ def pad_or_truncate(data, length):
     Returns:
         list: The features padded or truncated
     """
-    assert type(data) == list
     assert len(data) > 0
 
     @concurrent

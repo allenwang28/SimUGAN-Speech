@@ -64,7 +64,9 @@ def get_librispeech_texts(folder_paths):
                 Make sure librispeech_initialize.py is run in /scripts
             """.format(master_path)) 
 
-        transcriptions = master['transcriptions']
+        transcription_paths = master['transcription_paths']
+        for tp in transcription_paths:
+            transcriptions += list(pickle.load(open(tp, 'rb')))
 
     return transcriptions
 
@@ -113,11 +115,7 @@ def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True):
         verbose (:obj:`bool`, optional): verbosity. Defaults to True
 
     """
-    master = {}
-
-    master['paths'] = []
-    master['transcriptions'] = []
-    master['ids'] = []
+    file_map = {}
 
     voice = tts.sapi.Sapi()
 
@@ -148,20 +146,84 @@ def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True):
 
             save_name = '{0}-v{1}.flac'.format(i, j)
             sample_save_path = os.path.join(save_dir, save_name)
-            if not os.path.exists(sample_save_path):
-                generate_speech(voice, text, sample_save_path)
-            master['paths'].append(sample_save_path)
-            master['ids'].append(j)
-            master['transcriptions'].append(text)
+            generate_speech(voice, text, sample_save_path)
+            file_map[save_name] = text 
 
-    master_path = os.path.join(save_dir, 'master.pkl')
+    file_map_path = os.path.join(save_dir, 'file_map.pkl')
+
     if verbose:
         end = time.time()
         print ("")
         print ("Finished generating all of the samples in {0} seconds.".format(end - start))
-        print ("Now saving the master path to {0}".format(master_path))
+        print ("Now saving the file map to {0}".format(file_map_path))
 
-    pickle.dump(master, open(master_path, 'wb'))
+    pickle.dump(file_map, open(file_map_path, 'wb'))
+
+
+def process_synthetic_data(save_dir, num_chunks, verbose=True):
+    """Take all generated synthesized data and process them
+
+    For all synthesized data, create chunks for:
+    - transcriptions
+    - spectrograms
+
+    For any given chunk, i, the information will be saved to:
+    {save_dir}/transcription-i.pkl
+    {save_dir}/spectrograms-i.pkl
+
+    Args:
+        save_dir (str): Path to the generated synthesized data
+        num_chunks (int): The number of chunks to save data to
+        verbose (:obj:`bool`, optional): Verbosity. Defaults to True 
+
+    """
+    file_map_path = os.path.join(save_dir, 'file_map.pkl')
+    file_map = pickle.load(open(file_map_path, 'rb'))
+
+    master_file_path = os.path.join(save_dir, 'master.pkl')
+
+    all_files = list(file_map.keys())
+
+    file_chunks = chunkify(all_files, num_chunks)
+
+    master = {}
+    master['num_chunks'] = num_chunks
+    master['num_samples'] = len(all_files)
+    master['transcription_paths'] = []
+    master['spectrogram_paths']  = []
+    master['id_paths'] = []
+    msfl = 0
+
+    for i in range(num_chunks):
+        if verbose:
+            print ("--------------------------")
+            print ("Processing chunk {0} of {1}".format(i+1, num_chunks))
+        file_chunk = file_chunks[i]
+        file_chunk_correct = [os.path.join(SYNTHETIC_DIR, f) for f in file_chunk]
+        transcription_path = os.path.join(save_dir, 'transcription-{0}.pkl'.format(i))
+        spectrogram_path = os.path.join(save_dir, 'spectrograms-{0}.pkl'.format(i))
+        id_path = os.path.join(save_dir, 'ids-{0}.pkl'.format(i))
+
+        master['transcription_paths'].append(transcription_path)
+        master['spectrogram_paths'].append(spectrogram_path)
+        master['id_paths'].append(id_path)
+
+        pickle.dump([file_map[f] for f in file_chunk], open(transcription_path, 'wb'))
+        id_regex = re.compile(r'v[0-9]+')
+        pickle.dump([int(id_regex.findall(f)[0][1:]) for f in file_chunk], open(id_path, 'wb'))
+
+        s = audio_util.get_spectrograms(file_chunk_correct,
+                                        params=None,
+                                        maximum_size=None,
+                                        save_path=spectrogram_path,
+                                        verbose=verbose)
+        msfl = max(msfl, s[0].shape[0])
+    if verbose:
+        print ("Saving master file to {0}".format(master_file_path))
+    master['max_spectro_feature_length'] = msfl
+    master['max_text_length'] = len(max(file_map.items(), key=len))
+    pickle.dump(master, open(master_file_path, 'wb'))
+
 
 
 
@@ -170,18 +232,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script used to generate and preprocess synthesized data.")
 
     # Options to generate samples and generate spectrograms
+    parser.add_argument("--generate", action='store_true',
+                        help="Generate speech samples")
+    parser.add_argument("--process", action='store_true',
+                        help="Process the speech samples")
     parser.add_argument("--clean", action='store_true',
-                        help="Delete all existing data")
+                        help="Delete all existing processed data (but don't delete LibriSpeech folder)")
+    parser.add_argument("--num_chunks", default=5, type=int,
+                        help="Number of chunks to save to. Should be >1 to avoid MemoryError.")
     parser.add_argument("--percentage", default=1.0, type=float,
                         help="Between 0.0 and 1.0. Use this to only process a subset of the data.")
 
     # Options for which folders to use
     for folder in POSSIBLE_FOLDERS: 
         parser.add_argument("--{0}".format(folder), action='store_true',
-                            help="Include {0} LibriSpeech".format(folder))
+                            help="Include {0}".format(folder))
 
     parser.add_argument("--all", action='store_true',
-                        help="Include all possible LibriSpeech folders")
+                        help="Include all possible folders")
 
     # Verbosity
     parser.add_argument("--verbose", action='store_true',
@@ -218,12 +286,15 @@ if __name__ == "__main__":
         if args.verbose:
             print ("Cleaning {0}".format(save_dir))
 
-        if os.path.exists(save_dir):
-            shutil.rmtree(save_dir) 
+        shutil.rmtree(save_dir) 
         print ("Completed cleaning process.")
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    transcriptions = get_librispeech_texts(folder_names)
-    generate_speech_from_texts(save_dir, transcriptions, percentage=args.percentage, verbose=args.verbose)
+    if args.generate:
+        transcriptions = get_librispeech_texts(folder_names)
+        generate_speech_from_texts(save_dir, transcriptions, percentage=args.percentage, verbose=args.verbose)
+    if args.process:
+        process_synthetic_data(save_dir, args.num_chunks, verbose=args.verbose)
+

@@ -109,3 +109,4 @@ data/*
 # VIM swap files
 *.swp
 
+SimUGANSpeech/broken/*
