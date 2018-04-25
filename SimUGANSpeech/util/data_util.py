@@ -93,3 +93,8 @@ def pad_or_truncate(data, length):
         rmap[i] = pad_or_truncate_sample(sample, length)
 
     return [rmap[i] for i in range(len(rmap))]
+
+
+def text_to_indices(text): 
+    """Convert a string to a list of indices"""
+    return np.fromstring(text, dtype=np.uint8) - 97

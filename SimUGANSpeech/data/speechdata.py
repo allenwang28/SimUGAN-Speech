@@ -89,9 +89,6 @@ class SpeechBatchGenerator(object):
         audio_files = []
         ids = []
         transcriptions = []
-
-        if not audio_params:
-            self._audio_params = AudioParams()
         self._audio_params = audio_params
 
         if self._verbose:
@@ -119,6 +116,8 @@ class SpeechBatchGenerator(object):
         self._chunk_size = int(np.ceil(self._chunk_pct * len(audio_files)))
         self._all_files = list(zip(audio_files, ids, transcriptions))
 
+        self.epoch = -1
+
 
     def batch_generator(self):
         """Generator that randomly yields features
@@ -142,6 +141,7 @@ class SpeechBatchGenerator(object):
         """
         data = []
         while True:
+            self.epoch += 1
             remaining_files = copy.deepcopy(self._all_files)
             while remaining_files:
                 chunk = randomly_sample_stack(remaining_files, self._chunk_size)

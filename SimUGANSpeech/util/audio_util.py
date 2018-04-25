@@ -33,6 +33,7 @@ def get_spectrogram_from_path_cc(path, params):
                                            thresh=params.spectro_thresh,
                                            frame_size_in_ms=params.frame_size_in_ms,
                                            frame_stride_in_ms=params.frame_stride_in_ms,
+                                           max_time_in_s=params.max_time_in_s,
                                            real=params.real)
 
 @synchronized
@@ -67,7 +68,7 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
             Defaults to True.
     """
     if not params:
-        params = audio.SpectrogramParams()
+        params = audio.AudioParams()
     else:
         params = params
 

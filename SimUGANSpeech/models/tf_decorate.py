@@ -9,6 +9,7 @@ More information can be found here (most of this code copied from there):
 
 """
 import functools
+import tensorflow as tf
 
 def doublewrap(function):
     """

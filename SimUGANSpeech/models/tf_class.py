@@ -7,11 +7,9 @@ from abc import ABC, abstractmethod
 
 import tensorflow as tf
 from SimUGANSpeech.models.tf_decorate import define_scope
-from SimUGANSpeech.models.tf_class import TensorflowModel
 
 import time
 import os
-
 
 class TensorflowModel(ABC):
     __metaclass__ = abc.ABCMeta
@@ -26,11 +24,6 @@ class TensorflowModel(ABC):
                  save_dir):
         self._input_shape = input_shape
         self._output_shape = output_shape
-        self._max_input_length = max_input_length
-        self._max_output_length = max_output_length
-        self._num_output_features = data_source.num_output_features
-        self._training = training
-        self._reset = reset
         self._save_dir = save_dir
 
 
@@ -66,14 +59,14 @@ class TensorflowModel(ABC):
 
     @define_scope()
     def build_graph(self):
-        self._graph = tf.Graph()
+        self.graph = tf.Graph()
         with self.graph.as_default():
             # Specify the input 
-            self._input_tensor = tf.placeholder(tf.float32,
+            self.input_tensor = tf.placeholder(tf.float32,
                                                shape=self._input_shape)
 
             # Construct the model
-            self._output_node = self._construct()
+            self.output_tensor = self._construct()
 
             self._target_tensor = tf.placeholder(tf.float32,
                                                  shape=self._output_shape)

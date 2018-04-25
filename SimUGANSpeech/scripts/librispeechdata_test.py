@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from SimUGANSpeech.data.librispeechdata import LibriSpeechBatchGenerator
+from SimUGANSpeech.preprocessing.audio import AudioParams
 
 if __name__ == "__main__":
     # Parameters
@@ -15,7 +16,7 @@ if __name__ == "__main__":
                ]
 
     feature_sizes = [
-                      500, 
+                      200, 
                     ]
 
     batch_size = 1
@@ -23,6 +24,9 @@ if __name__ == "__main__":
 
     chunk_pct=0.3
     num_iterations = 3
+
+    audio_params = AudioParams()
+    audio_params.max_time_in_s = 3
 
     lsg = LibriSpeechBatchGenerator(folder_names,
                                     features,

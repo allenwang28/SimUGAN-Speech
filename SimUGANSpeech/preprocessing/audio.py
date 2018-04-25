@@ -41,11 +41,11 @@ DEFAULT_FRAME_STRIDE_MS = 10
 DEFAULT_INVERT_ITER = 15
 
 DEFAULT_WINDOW_FUNCTION = None
-DEFAULT_MAX_TIME = None
+DEFAULT_MAX_TIME_IN_S = None
 
 
 class AudioParams(object):
-    """Helper class to specify spectrogram parameters"""
+    """Helper class to specify parameters"""
 
     def __init__(self):
         """Initialization to only default values."""
@@ -63,7 +63,7 @@ class AudioParams(object):
         self.frame_stride_in_ms = DEFAULT_FRAME_STRIDE_MS
         self.invert_iter = DEFAULT_INVERT_ITER
         self.window_function = DEFAULT_WINDOW_FUNCTION
-        self.max_time = DEFAULT_MAX_TIME 
+        self.max_time_in_s = DEFAULT_MAX_TIME_IN_S
 
 def get_spectrogram_from_path(file_path,
                               highcut=DEFAULT_HIGHCUT,
@@ -72,6 +72,7 @@ def get_spectrogram_from_path(file_path,
                               thresh=DEFAULT_SPECTRO_THRESH,
                               frame_size_in_ms=DEFAULT_FRAME_SIZE_MS,
                               frame_stride_in_ms=DEFAULT_FRAME_STRIDE_MS,
+                              max_time_in_s=DEFAULT_MAX_TIME_IN_S,
                               real=DEFAULT_REAL):
     """Get the spectrogram from a file.
 
@@ -86,7 +87,7 @@ def get_spectrogram_from_path(file_path,
     Returns:
         np.array: Spectrogram
     """
-    signal, samplerate = get_file_data(file_path)
+    signal, samplerate = get_file_data(file_path, max_time_in_s)
     signal = butter_bandpass_filter(signal, samplerate, lowcut, highcut)
 
     return stft_spectrogram(signal.astype('float64'),
@@ -97,7 +98,7 @@ def get_spectrogram_from_path(file_path,
                             thresh=thresh)
 
 
-def get_file_data(audio_file_path, max_time=DEFAULT_MAX_TIME):
+def get_file_data(audio_file_path, max_time=DEFAULT_MAX_TIME_IN_S):
     """Get the signal and sample rate from a given audio file
 
     Gets the signal as an np.array and sample rate given an audio file path
