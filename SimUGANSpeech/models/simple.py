@@ -16,10 +16,8 @@ class SimpleNN(TensorflowModel):
 
     @define_scope
     def optimize(self):
-        logprob = tf.log(self.predictions + 1e-12)
-        cross_entropy = -tf.reduce_sum(self.output_tensor * logprob)
         optimizer = tf.train.RMSPropOptimizer(0.03)
-        return optimizer.minimize(cross_entropy)
+        return optimizer.minimize(self.loss)
 
     @define_scope
     def loss(self):
