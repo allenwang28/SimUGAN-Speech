@@ -5,6 +5,10 @@ from SimUGANSpeech.models.tf_decorate import define_scope
 from SimUGANSpeech.models.tf_class import TensorflowModel
 
 class SimpleNN(TensorflowModel):
+    @property
+    def name(self):
+        return "SimpleNN"
+
     @define_scope(initializer=tf.contrib.slim.xavier_initializer())
     def predictions(self):
         with tf.variable_scope('simple') as scope:

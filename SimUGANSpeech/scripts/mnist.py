@@ -1,23 +1,25 @@
 import numpy as np
-import tensorflow 
 import os
 import sys
 
+import tensorflow as tf 
 from tensorflow.examples.tutorials.mnist import input_data
 
 from SimUGANSpeech.models.simple import SimpleNN
-from SimUGANSpeech.definitions import TENSORFLOW_DIR
-from SimUGANSpeech.definitions import DATA_DIR
+from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 
-NUM_ITER = 10
+NUM_EPOCHS = 1000
 BATCH_SIZE = 100
-RESTORE = True
+RESTORE = False 
+DISPLAY_RATE = 10
+BACKUP_RATE = 100
 
 if __name__ == "__main__":
     # file paths
     mnist_save_path = os.path.join(DATA_DIR, 'mnist_ex')
     model_save_dir = os.path.join(TENSORFLOW_DIR, 'simple')
     model_save_path = os.path.join(model_save_dir, 'model.cpkt')
+    logs_path = os.path.join(TF_LOGS_DIR, 'simple')
     mnist = input_data.read_data_sets(mnist_save_path, one_hot = True)
 
     # specify classifier parameters
@@ -27,19 +29,24 @@ if __name__ == "__main__":
     # construct classifier
     clf = SimpleNN(input_shape, output_shape, verbose=True)
 
+    # Merge all summaries into a single op
+    merged_summary_op = tf.summary.merge_all()
+    
+    # op to write logs to Tensorboard
+    summary_writer = tf.summary.FileWriter(logs_path)
 
-    # start tensorflow session
-    sess = tensorflow.Session()
+    # start tf session
+    sess = tf.Session()
     sess.run(clf.initial_op())
 
     # saver used for checkpoints
-    saver = tensorflow.train.Saver()
+    saver = tf.train.Saver()
 
 
     # If we want to restore, restore if possible
     if RESTORE:
         print ("Restoring session")
-        latest = tensorflow.train.latest_checkpoint(model_save_dir)
+        latest = tf.train.latest_checkpoint(model_save_dir)
         if latest:
             saver.restore(sess, latest)
         else:
@@ -49,19 +56,21 @@ if __name__ == "__main__":
 
 
     # Start training
-    for i in range(NUM_ITER):
-        # Back up every 5 
-        if i % 5 == 0:
-            model_backup_save_path = os.path.join(model_save_dir, 'backup-{0}.cpkt'.format(i / 5))
+    for epoch in range(NUM_EPOCHS):
+        if epoch % BACKUP_RATE == 0:
+            backup_num = epoch / BACKUP_RATE
+            model_backup_save_path = os.path.join(model_save_dir, 'backup-{0}.cpkt'.format(backup_num))
             saver.save(sess, model_backup_save_path)
 
-        # Test/Evaluate
-        images, labels = mnist.test.images, mnist.test.labels
-        error = sess.run(clf.error, {clf.input_tensor: images, clf.output_tensor: labels})
-        print ('Test error: {:6.2f}%'.format(100 * error))
+        if epoch % DISPLAY_RATE == 0:
+            # Test/Evaluate
+            images, labels = mnist.test.images, mnist.test.labels
+            error = sess.run(clf.error, {clf.input_tensor: images, clf.output_tensor: labels})
+            print ('Test error: {:6.2f}%'.format(100 * error))
 
+        num_batches = int(mnist.train.num_examples/BATCH_SIZE)
         # Train
-        for _ in range(100):
+        for i in range(num_batches):
             # Load batch
             batch_xs, batch_ys = mnist.train.next_batch(BATCH_SIZE)
             
@@ -69,8 +78,9 @@ if __name__ == "__main__":
             feed_dict = { clf.input_tensor : batch_xs,
                           clf.output_tensor : batch_ys }
 
-            # Run a step of optimizer
-            sess.run(clf.optimize, feed_dict=feed_dict)
+            # Run optimizer, get cost, and summarize
+            _, l, summary = sess.run([clf.optimize, clf.loss, merged_summary_op], feed_dict=feed_dict)
+            summary_writer.add_summary(summary, epoch * num_batches + i)
 
     save_path = saver.save(sess, model_save_path)
     print ("Saved session to {0}".format(save_path))

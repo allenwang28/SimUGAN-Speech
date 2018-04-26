@@ -32,6 +32,13 @@ class TensorflowModel(ABC):
         self.loss
         self.error
 
+        tf.summary.scalar("{0}-loss".format(self.name), self.loss)
+        tf.summary.scalar("{0}-error".format(self.name), self.error)
+
+    @property
+    def name(self):
+        raise NotImplementedError('return the name of the model')
+
     @define_scope
     def predictions(self):
         raise NotImplementedError('construct the graph here')
