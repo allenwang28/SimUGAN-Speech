@@ -16,6 +16,8 @@ Todo:
 import numpy as np
 import pandas as pd
 from scipy.signal import butter, lfilter
+from scipy.fftpack import dct
+
 import copy
 import soundfile as sf
 import os
@@ -43,6 +45,10 @@ DEFAULT_INVERT_ITER = 15
 DEFAULT_WINDOW_FUNCTION = None
 DEFAULT_MAX_TIME_IN_S = None
 
+DEFAULT_CEP_LIFTER = 22
+
+DEFAULT_MEAN_NORMALIZE = True
+
 
 class AudioParams(object):
     """Helper class to specify parameters"""
@@ -64,6 +70,8 @@ class AudioParams(object):
         self.invert_iter = DEFAULT_INVERT_ITER
         self.window_function = DEFAULT_WINDOW_FUNCTION
         self.max_time_in_s = DEFAULT_MAX_TIME_IN_S
+        self.cep_lifter = DEFAULT_CEP_LIFTER
+        self.mean_normalize = DEFAULT_MEAN_NORMALIZE
 
 def get_spectrogram_from_path(file_path,
                               highcut=DEFAULT_HIGHCUT,
@@ -78,10 +86,14 @@ def get_spectrogram_from_path(file_path,
 
     Args:
         file_path (str): Path to file
+        highcut (:obj:`int`, optional): Highcut for butter bandpass filter
+        lowcut (:obj:`int`, optional): Lowcut for butter bandpass filter
         log (:obj:`bool`, optional): Whether to apply log transform
         thresh (:obj:`int`, optional): Threshold minimum power for log spectrogram
         frame_size_in_ms (:obj:`int`, optional): Size for fast fourier transform
-        frame_stride_in_ms (:obj:`int`, optional): Step size for the spectrogram
+        frame_stride_in_ms (:obj:`int`, optional): Stride size in ms
+        max_time_in_s (:obj:`float`, optional): The max time in seconds to keep 
+            for an audio signal
         real (:obj:`bool`, optional): Whether or not we are dealing with only real numbers
 
     Returns:
@@ -422,3 +434,171 @@ def mel_to_frequency(m):
     """Convert from mel-scale to frequency (Hz)"""
     return 700 * (10**(m / 2595) - 1)
     
+
+def get_fft_from_frames(frames, NFFT):
+    """Get FFT from provided frames.
+
+    Apply N-point fast fourier transform using numpy to extracted frames.
+
+    Args:
+        frames (np.array): the frames
+        NFFT (int): N, typically 256 or 512
+
+    Returns:
+        np.array : the FFT
+
+    """
+    return np.fft.rfft(frames, NFFT)
+
+
+def get_power_spectrum_from_frames(frames, NFFT):
+    """Get the power spectrum from frames.
+
+    The power spectrum is:
+        |FFT(signal)|^2 / N
+
+    Args:
+        frames (np.array): the frames
+        NFFT (int): N for the N-point FFT
+
+    Returns:
+        np.array : the power spectrum 
+    """
+    return np.abs(get_fft_from_frames(frames, NFFT))**2 / NFFT
+
+
+def get_filter_banks_from_power_spectrum(power_spectrum, NFFT, samplerate, num_filters=40):
+    """Get filter banks from the power spectrum
+
+    Args:
+        power_spectrum (np.array): the power spectrum 
+            extracted from the signal frames 
+        NFFT (int): the NFFT used for extracting the power spectrum
+        samplerate (int): the sample rate of the signal.
+        num_filters (:obj:`int`, optional) : desired number of filters in the filter bank
+            Defaults to 40.
+    
+    Returns:
+        np.array : extracted filter banks
+
+    """
+    low_freq = 0
+    high_freq = samplerate
+
+    low_mel = frequency_to_mel(low_freq)
+    high_mel = frequency_to_mel(high_freq)
+
+    mel_points = np.linspace(low_mel, high_mel, num_filters + 2)
+    freq_points = mel_to_frequency(mel_points)
+    fft_bins = np.floor((NFFT + 1) * freq_points / samplerate)
+
+    filters = np.zeros((num_filters, int(np.floor(NFFT/2 + 1))))
+
+    for m in range(1, num_filters + 1):
+        left = int(fft_bins[m - 1])
+        center = int(fft_bins[m])
+        right = int(fft_bins[m + 1])
+
+        for k in range(left, center):
+            filters[m - 1, k] = (k - fft_bins[m - 1]) / (fft_bins[m] - fft_bins[m - 1])
+        for k in range(center, right):
+            filters[m - 1, k] = (fft_bins[m + 1] - k) / (fft_bins[m + 1] - fft_bins[m])
+    filter_banks = np.dot(power_spectrum, filters.T)
+    # Replace all instances of 0 with a very small number (epsilon) to avoid problems with log
+    filter_banks = np.where(filter_banks == 0, np.finfo(float).eps, filter_banks)
+    return 20 * np.log10(filter_banks)
+
+
+def get_mfcc_coefficients_from_filter_banks(filter_banks, cep_lifter=DEFAULT_CEP_LIFTER):
+    """Get MFCC coefficients from filter banks
+
+    Applies DCT to decorrelate the filter bank coefficients.
+
+    Note:
+        For ASR, typically only cepstral coefficients 2-13 are retained.
+        For completeness, this isn't automatically filtered in this function.
+
+    Args:
+        filter_banks (np.array): Filter banks extracted from the signal.
+        cep_lifter (:obj:`int`, optional): Parameter in sinusoidal liftering.
+            Defaults to 22. If None, then sinusoidal_liftering is not applied.
+
+    Returns:
+        np.array : MFCC coefficients
+
+    """
+    mfcc = dct(filter_banks, axis=1, norm='ortho')
+    if cep_lifter:
+        (n_frames, n_coeff) = mfcc.shape
+        n = np.arange(n_coeff)
+        lift = 1 + (cep_lifter / 2) * np.sin(np.pi * n / cep_lifter)
+        mfcc *= lift
+    return mfcc
+
+
+def mean_normalize(features):
+    """Apply mean normalization.
+
+    Mean normalization can be applied to MFCC coefficients or from filter banks.
+    This is used to balance the spectrum and to improve the SNR.
+
+    Args:
+        features (np.array) : MFCCs or filter banks
+
+    Returns:
+        np.array : mean normalized
+    """
+    return features - (np.mean(features, axis=0) + 1e-8)
+
+
+def get_mfcc_from_file(file_path,
+                       max_time_in_s=DEFAULT_MAX_TIME_IN_S,
+                       pre_emphasis=DEFAULT_PRE_EMPHASIS,
+                       frame_size_in_ms=DEFAULT_FRAME_SIZE_MS,
+                       frame_stride_in_ms=DEFAULT_FRAME_STRIDE_MS,
+                       window_function=DEFAULT_WINDOW_FUNCTION,
+                       NFFT=DEFAULT_NFFT,
+                       num_filters=DEFAULT_NUM_FILTERS,
+                       cep_lifter=DEFAULT_CEP_LIFTER,
+                       apply_mean_normalize=DEFAULT_MEAN_NORMALIZE):
+    """Get the MFCC from an audio file.
+
+    Extracts MFCC features using typical ASR parameters.
+
+    Args:
+        file_path (str): path to the file
+        max_time_in_s (:obj:`float`, optional): The max time in seconds to keep 
+            for an audio signal
+        pre_emphasis (:obj:`int`, optional): The pre-emphasis to be applied 
+            to the audio signal
+        frame_size_in_ms (:obj:`int`, optional): Frame size in ms
+        frame_stride_in_ms (:obj:`int`, optional): Stride size in ms
+        window_function (:obj:`function`, optional): The windowing function
+            to be applied to the frames
+        NFFT (:obj:`int`, optional): Number of points along transformation axis 
+            in the input to use 
+        num_filters (:obj:`int`, optional): desired number of filters in the 
+            filter bank
+        cep_lifter (:obj:`int`, optional): Parameter in sinusoidal liftering.
+        apply_mean_normalize (:obj:`bool`, optional): Whether or not to apply
+            mean normalization to the MFCC.
+
+    Returns:
+        np.array : normalized MFCC
+
+    """
+    signal, samplerate = get_file_data(file_path, max_time_in_s)
+    if pre_emphasis:
+        signal = apply_pre_emphasis_to_signal(signal, pre_emphasis)
+
+    frames = extract_frames_from_signal(signal, samplerate, frame_size_in_ms, frame_stride_in_ms, window_function)
+    power_spectrum = get_power_spectrum_from_frames(frames, NFFT)
+
+    filter_banks = get_filter_banks_from_power_spectrum(power_spectrum, NFFT, samplerate, num_filters)
+    mfcc = get_mfcc_coefficients_from_filter_banks(filter_banks, cep_lifter)
+    if mean_normalize:
+        return mean_normalize(mfcc)
+    else:
+        return mfcc
+
+

@@ -1,4 +1,15 @@
+# -*- coding: utf-8 *-* 
+"""MnistSession class 
 
+A class that used to train for the Mnist task 
+
+Using the TensorflowSession as an abstract class should make
+implementation more straightforward
+
+Todo:
+    * write the infer function
+
+"""
 from SimUGANSpeech.tf_session.tf_session import TensorflowSession
 
 import os
@@ -11,19 +22,23 @@ from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 class MnistSession(TensorflowSession):
     @property 
     def name(self):
+        """Name of the session"""
         return "MNIST"
 
     @property 
     def logs_path(self):
+        """Path to save Tensorboard logs"""
         return os.path.join(TF_LOGS_DIR, 'simple')
 
 
     @property
     def session_save_dir(self):
+        """Path to save session checkpoints"""
         return os.path.join(TENSORFLOW_DIR, 'mnist_session')
 
 
     def initialize(self):
+        """Mnist specific initializations"""
         mnist_save_path = os.path.join(DATA_DIR, 'mnist_ex')
         self.mnist = input_data.read_data_sets(mnist_save_path, one_hot = True)
 
@@ -80,8 +95,12 @@ class MnistSession(TensorflowSession):
         self.save_checkpoint()
 
     def test(self):
+        """Return the error for the current model."""
         images, labels = self.mnist.test.images, self.mnist.test.labels
         error = self.sess.run(self.clf.error, {self.clf.input_tensor : images, self.clf.output_tensor: labels})
         return error
              
-
+    def infer(self):
+        """Infer"""
+        # TODO
+        pass

@@ -18,8 +18,8 @@ import time
 import pickle
 import copy
 
-from SimUGANSpeech.util.data_util import randomly_sample_stack, pad_or_truncate
-from SimUGANSpeech.util.audio_util import get_spectrograms
+from SimUGANSpeech.util.data_util import randomly_sample_stack, pad_or_truncate, randomly_split 
+from SimUGANSpeech.util.audio_util import get_audio_features 
 from SimUGANSpeech.preprocessing.audio import AudioParams
 
 DEFAULT_BATCH_SIZE = 10
@@ -27,12 +27,14 @@ DEFAULT_MAX_TIME_STEPS = 50
 DEFAULT_MAX_OUTPUT_LENGTH = 50
 
 DEFAULT_CHUNK_PROCESS_PERCENTAGE = 0.3
+DEFAULT_VALIDATION_PCT=0.3
 
 ACCEPTED_LABELS =   ['transcription_chars',
                      'voice_id']
 
 FEATURES = [ 
              'spectrogram',
+             'mfcc',
              'transcription',
              'id',
            ]
@@ -41,9 +43,11 @@ FEATURES = [
 class SpeechBatchGenerator(object):
     def __init__(self,
                  folder_dir,
-                 folder_names,
+                 training_folder_names,
+                 testing_folder_names,
                  features,
                  feature_sizes,
+                 validation_pct=DEFAULT_VALIDATION_PCT,
                  audio_params=None,
                  batch_size=DEFAULT_BATCH_SIZE,
                  chunk_pct=DEFAULT_CHUNK_PROCESS_PERCENTAGE,
@@ -52,13 +56,17 @@ class SpeechBatchGenerator(object):
         
         Args:
             folder_dir (str): The path to the data folder
-            folder_paths (list of str): List of the folder names (or datasets)
-                (e.g., dev-clean, dev-test, etc.)
+            training_folder_names (list of str): List of the folder names (or datasets)
+                (e.g., dev-clean, dev-test, etc.) to be used for training
+            training_folder_names (list of str): List of the folder names (or datasets)
+                (e.g., dev-clean, dev-test, etc.) to be used for testing 
             features (list of str): List of desired features.
                 See constant defined FEATURES for list of valid features.
             feature_sizes (list of int): List of maximum length of features.
                 Has to be the same shape as features. The features will be
                 truncated or padded to match the specified shape.
+            validation_pct (:obj:`float`, optional): The percent of training
+                data to be held back for validation.
             audio_params (:obj:`AudioParameters`, optional): Parameters for audio
                 See /preprocessing/audio.py for more information.
                 Defaults to None
@@ -114,12 +122,13 @@ class SpeechBatchGenerator(object):
 
         assert (len(audio_files) == len(ids) == len(transcriptions))
         self._chunk_size = int(np.ceil(self._chunk_pct * len(audio_files)))
-        self._all_files = list(zip(audio_files, ids, transcriptions))
+        self._all_data = list(zip(audio_files, ids, transcriptions))
+
+        self._training_data, self._validation_data = randomly_split(self._all_data)
 
         self.epoch = -1
 
-
-    def batch_generator(self):
+    def training_batch_generator(self):
         """Generator that randomly yields features
 
         Batch generator that yields features specified during initialization.
@@ -142,16 +151,20 @@ class SpeechBatchGenerator(object):
         data = []
         while True:
             self.epoch += 1
-            remaining_files = copy.deepcopy(self._all_files)
+            remaining_files = copy.deepcopy(self._training_data)
             while remaining_files:
                 chunk = randomly_sample_stack(remaining_files, self._chunk_size)
                 af_chunk, id_chunk, t_chunk = zip(*chunk)
 
                 for feature, feature_size in zip(self._features, self._feature_sizes):
                     fdata = []
-                    if feature == 'spectrogram':
-                        spectrograms = get_spectrograms(af_chunk, verbose=self._verbose, params=self._audio_params)
-                        fdata.append(pad_or_truncate(spectrograms, feature_size))
+                    if feature == 'spectrogram' or feature == 'mfcc':
+                        features = get_audio_features(af_chunk, 
+                                                      feature,
+                                                      verbose=self._verbose, 
+                                                      maximum_size=feature_size,
+                                                      params=self._audio_params)
+                        fdata.append(features)
                     elif feature == "id":
                         fdata.append(id_chunk)
                     elif feature == "transcription":

@@ -74,9 +74,7 @@ class TensorflowModel(object):
     def error(self):
         """Error function"""
         raise NotImplementedError('specify error')
-    
-    def initial_op(self):
-        return tf.global_variables_initializer()
+
 
     def var_trainable_op(self):
         return tf.trainable_variables()

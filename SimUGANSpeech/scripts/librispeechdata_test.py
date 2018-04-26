@@ -12,7 +12,7 @@ if __name__ == "__main__":
                    ]
 
     features = [
-                 'spectrogram',
+                 'mfcc',
                ]
 
     feature_sizes = [

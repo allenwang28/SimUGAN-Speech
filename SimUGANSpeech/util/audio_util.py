@@ -24,28 +24,44 @@ from deco import concurrent, synchronized
 import pickle
 
 @concurrent 
-def get_spectrogram_from_path_cc(path, params):
+def get_audio_feature_from_path_cc(path, feature, params):
     """Utility function for concurrent spectrogram from path"""
-    return audio.get_spectrogram_from_path(path,
-                                           highcut=params.highcut,
-                                           lowcut=params.lowcut,
-                                           log=params.spectro_log,
-                                           thresh=params.spectro_thresh,
-                                           frame_size_in_ms=params.frame_size_in_ms,
-                                           frame_stride_in_ms=params.frame_stride_in_ms,
-                                           max_time_in_s=params.max_time_in_s,
-                                           real=params.real)
+    if feature == 'mfcc':
+        return audio.get_mfcc_from_file(path,
+                                        max_time_in_s=params.max_time_in_s,
+                                        pre_emphasis=params.pre_emphasis,
+                                        frame_size_in_ms=params.frame_size_in_ms,
+                                        frame_stride_in_ms=params.frame_stride_in_ms,
+                                        window_function=params.window_function,
+                                        NFFT=params.nfft,
+                                        num_filters=params.num_filters,
+                                        cep_lifter=params.cep_lifter,
+                                        apply_mean_normalize=params.mean_normalize)
+    elif feature == 'spectrogram':
+        return audio.get_spectrogram_from_path(path,
+                                               highcut=params.highcut,
+                                               lowcut=params.lowcut,
+                                               log=params.spectro_log,
+                                               thresh=params.spectro_thresh,
+                                               frame_size_in_ms=params.frame_size_in_ms,
+                                               frame_stride_in_ms=params.frame_stride_in_ms,
+                                               max_time_in_s=params.max_time_in_s,
+                                               real=params.real)
+    else:
+        raise ValueError("Unsupported feature {0} provided".format(feature))          
+
 
 @synchronized
-def get_spectrograms_from_path_cc(audio_files, params):
+def get_audio_features_from_path_cc(audio_files, feature, params):
     """Utility function for synchronizing concurrent spectrogram from paths"""
     # Use a dictionary - concurrent processing does not preserve order
-    spectrograms = {}
+    results = {}
     for path in audio_files:
-        spectrograms[path] = get_spectrogram_from_path_cc(path, params)
-    return [spectrograms[path] for path in audio_files] 
+        results[path] = get_audio_feature_from_path_cc(path, feature, params)
+    return [results[path] for path in audio_files] 
 
-def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None, verbose=True):
+
+def get_audio_features(audio_files, feature, params=None, maximum_size=None, save_path=None, verbose=True):
     """Get all spectrograms from audio files.
 
     Given a list of audio files, return a list of padded/truncated 2D numpy
@@ -53,6 +69,7 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
 
     Args:
         audio_files (list of str): all audio files
+        feature (str): 'mfcc' or 'spectrogram'
         params (:obj:`SpectroGramParams`, optional): Used to specify
             parameters for spectrogram generation.
             If None is provided, then the default parameters are used.
@@ -78,32 +95,25 @@ def get_spectrograms(audio_files, params=None, maximum_size=None, save_path=None
             return data
     except:
         if verbose:
-            print ("Generating spectrograms from audio files.")
+            print ("Generating {0}s from audio files.".format(feature))
             start = time.time()
 
-        spectrograms = get_spectrograms_from_path_cc(audio_files, params)
+        results = get_audio_features_from_path_cc(audio_files, feature, params)
 
         if verbose:
             end = time.time()
-            print ("Completed generating spectrograms in {0} seconds".format(end - start))
-            print ("Now padding/truncating each spectrogram")
+            print ("Completed generating {0}s in {1} seconds".format(feature, end - start))
+            print ("Now padding/truncating the {0}s".format(feature))
             start = time.time()
         
         if not maximum_size:
-            maximum_size = max(spectro.shape[0] for spectro in spectrograms) 
+            maximum_size = max(result.shape[0] for result in results)
 
-        #spectrograms = pad_spectrograms_cc(spectrograms, audio_files, maximum_size)
-        spectrograms = pad_or_truncate(spectrograms, maximum_size)
+        results = pad_or_truncate(results, maximum_size)
 
         if verbose:
             end = time.time()
-            print ("Completed padding/truncated each spectrogram in {0} seconds".format(end - start))
+            print ("Completed padding/truncated each {0} in {1} seconds".format(feature, end - start))
 
-        if save_path:
-            if verbose:
-                print ("Saving spectrograms to {0}".format(save_path))
-            #pickle.dump(spectrograms, open(save_path, 'wb'))
-            np.save(open(save_path, 'wb'), spectrograms)
-        return spectrograms
-
+        return results
 

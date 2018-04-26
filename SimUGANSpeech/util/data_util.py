@@ -58,6 +58,43 @@ def randomly_sample_stack(stack, N):
         stack[:] = [] # Empty the stack by reference
         return res 
 
+
+def randomly_split_list_to_sizes(l, sizes_pct):
+    """Randomly split a list into different sizes
+
+    Args:
+        l (list): The list to be split
+        sizes_pct (list of floats): A list of all
+            the percentage sizes. Should sum < 1
+
+    Returns:
+        A list of lists
+    """
+    l = copy.deepcopy(l)
+    num_elements = len(l)
+    result = []
+    for s in sizes_pct:
+        N = int(np.ceil(s * num_elements))
+        result.append(randomly_sample_stack(l, N))
+    result.append(l)
+    return result
+
+
+def randomly_split(l, first_pct_size):
+    """Randomly split a list into two
+
+    Args:
+        l (list): The list to be split
+        first_pct_size (float): Percentage of 
+            size for first list returned
+
+    Returns:
+        tuple of lists: two lists, of sizes:
+            (first_pct_size * N, (1 - first_pct_size) * N)
+    """
+    return randomly_split_list_to_sizes(l ,[first_pct_size])
+
+
 @synchronized
 def pad_or_truncate(data, length):
     """Pads or truncates a list of data
@@ -98,3 +135,4 @@ def pad_or_truncate(data, length):
 def text_to_indices(text): 
     """Convert a string to a list of indices"""
     return np.fromstring(text, dtype=np.uint8) - 97
+
