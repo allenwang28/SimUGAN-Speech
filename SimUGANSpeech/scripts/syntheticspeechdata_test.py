@@ -26,10 +26,8 @@ if __name__ == "__main__":
                                         chunk_pct=chunk_pct,
                                         verbose=verbose)
 
-    bg = sbg.batch_generator()
-
     for i in range(num_iterations):
-        batch = next(bg)
+        batch = sbg.get_training_batch()
         assert (len(batch) == len(features))
         assert (len(batch[0]) == batch_size)
 

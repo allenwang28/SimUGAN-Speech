@@ -92,7 +92,8 @@ def randomly_split(l, first_pct_size):
         tuple of lists: two lists, of sizes:
             (first_pct_size * N, (1 - first_pct_size) * N)
     """
-    return randomly_split_list_to_sizes(l ,[first_pct_size])
+    print (first_pct_size)
+    return randomly_split_list_to_sizes(l, [first_pct_size])
 
 
 @synchronized

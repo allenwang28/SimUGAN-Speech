@@ -40,6 +40,46 @@ FEATURES = [
            ]
 
 
+def load_speech_data(folder_dir, folder_names):
+    """Load speech data from master file
+
+    Using the data processed from the speech generation scripts,
+    extract the audio file paths, transcriptions, and ids.
+
+    Args:
+        folder_dir (str): The directory of the data
+        folder_names (str): The individual folder names 
+
+    Returns:
+        list of tuples: Each entry is a tuple, each are: 
+            (audio_file, transcription, id)
+
+    """
+    audio_files = []
+    ids = []
+    transcriptions = []
+    if not folder_names:
+        return []
+    for fname in folder_names:
+        fpath = os.path.join(folder_dir, fname)
+        master_path = os.path.join(fpath, 'master.pkl')
+
+        try:
+            master = pickle.load(open(master_path, 'rb'))
+        except:
+            raise RuntimeError("""
+                There was a problem with loading the master file, {0}.\n
+                Make sure the data is preprocessed. Check in /scripts
+            """.format(master_path)) 
+        audio_files += master['paths']
+        transcriptions += master['transcriptions']
+        ids += master['ids']
+
+    assert (len(audio_files) == len(ids) == len(transcriptions))
+    speech_data = list(zip(audio_files, ids, transcriptions))  
+    return speech_data
+
+
 class SpeechBatchGenerator(object):
     def __init__(self,
                  folder_dir,
@@ -93,43 +133,63 @@ class SpeechBatchGenerator(object):
         if len(feature_sizes) != len(features):
             raise ValueError('Length of feature_sizes should match length of features')
         self._verbose = verbose
+        
 
-        audio_files = []
-        ids = []
-        transcriptions = []
+        training_data = load_speech_data(folder_dir, training_folder_names)
+        self._test_data = load_speech_data(folder_dir, testing_folder_names)
+
+        self._validation_data, self._training_data = randomly_split(training_data, validation_pct)
+        self.num_training_samples = len(self._training_data)
+
+        self._training_batch_generator = self.data_batch_generator(self._training_data)
+
         self._audio_params = audio_params
 
-        if self._verbose:
-            print ("Loading the master file...")
-            t = time.time()
-        for fname in folder_names:
-            fpath = os.path.join(folder_dir, fname)
-            master_path = os.path.join(fpath, 'master.pkl')
 
-            try:
-                master = pickle.load(open(master_path, 'rb'))
-            except:
-                raise RuntimeError("""
-                    There was a problem with loading the master file, {0}.\n
-                    Make sure the data is preprocessed. Check in /scripts
-                """.format(master_path)) 
-            audio_files += master['paths']
-            transcriptions += master['transcriptions']
-            ids += master['ids']
-        
-        if self._verbose:
-            print ("Finished loading the master file in {0}".format(time.time() - t))
+    def _get_speechdata_features(self, speechdata):
+        """Extract the features from speechdata
 
-        assert (len(audio_files) == len(ids) == len(transcriptions))
-        self._chunk_size = int(np.ceil(self._chunk_pct * len(audio_files)))
-        self._all_data = list(zip(audio_files, ids, transcriptions))
+        From the speech data (list of tuples), extract
+        user-specified features
 
-        self._training_data, self._validation_data = randomly_split(self._all_data)
+        Args:
+            speechdata (list of tuples): The list of 
+                (audio file, transcription, id) tuples
 
-        self.epoch = -1
+        Returns:
+            list of tuples: The features 
 
-    def training_batch_generator(self):
-        """Generator that randomly yields features
+        """
+        audio_files, ids, transcriptions = zip(*speechdata)
+        feature_data = []
+        for feature, feature_size in zip(self._features, self._feature_sizes):
+            if feature == 'spectrogram' or feature == 'mfcc':
+                features = get_audio_features(audio_files, 
+                                              feature,
+                                              verbose=self._verbose, 
+                                              maximum_size=feature_size,
+                                              params=self._audio_params)
+                feature_data.append(features)
+            elif feature == "id":
+                feature_data.append(ids)
+            elif feature == "transcription":
+                feature_data.append(pad_or_truncate(transcriptions, feature_size))
+        return list(zip(*(feature_data)))
+
+    def get_training_batch(self):
+        """Get a batch of training data"""
+        return next(self._training_batch_generator)
+
+    def get_test_data(self):
+        """Get all testing data"""
+        return self._get_speech_data_features(self._test_data)
+
+    def get_validation_data(self):
+        """Get all validation data"""
+        return self._get_speech_data_features(self._validation_data)
+
+    def data_batch_generator(self, speech_data):
+        """Generator that randomly yields features in chunks
 
         Batch generator that yields features specified during initialization.
         See Notes for more details about implementation.
@@ -149,27 +209,13 @@ class SpeechBatchGenerator(object):
 
         """
         data = []
+        chunk_size = int(np.ceil(self._chunk_pct * len(speech_data)))
         while True:
-            self.epoch += 1
-            remaining_files = copy.deepcopy(self._training_data)
+            remaining_files = copy.deepcopy(speech_data)
             while remaining_files:
-                chunk = randomly_sample_stack(remaining_files, self._chunk_size)
-                af_chunk, id_chunk, t_chunk = zip(*chunk)
-
-                for feature, feature_size in zip(self._features, self._feature_sizes):
-                    fdata = []
-                    if feature == 'spectrogram' or feature == 'mfcc':
-                        features = get_audio_features(af_chunk, 
-                                                      feature,
-                                                      verbose=self._verbose, 
-                                                      maximum_size=feature_size,
-                                                      params=self._audio_params)
-                        fdata.append(features)
-                    elif feature == "id":
-                        fdata.append(id_chunk)
-                    elif feature == "transcription":
-                        fdata.append(pad_or_truncate(t_chunk, feature_size))
-                data += list(zip(*(fdata)))
+                chunk = randomly_sample_stack(remaining_files, chunk_size)
+                feature_data_chunk = self._get_speechdata_features(chunk)
+                data += feature_data_chunk
 
                 while len(data) > self._batch_size:
                     batch = randomly_sample_stack(data, self._batch_size)

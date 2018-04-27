@@ -29,16 +29,15 @@ if __name__ == "__main__":
     audio_params.max_time_in_s = 3
 
     lsg = LibriSpeechBatchGenerator(folder_names,
+                                    [],
                                     features,
                                     feature_sizes,
                                     batch_size=batch_size,
                                     chunk_pct=chunk_pct,
                                     verbose=verbose)
 
-    bg = lsg.batch_generator()
-
     for i in range(num_iterations):
-        batch = next(bg)
+        batch = lsg.get_training_batch()
         assert (len(batch) == len(features))
         assert (len(batch[0]) == batch_size)
 
