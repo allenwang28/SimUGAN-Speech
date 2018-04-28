@@ -75,27 +75,25 @@ class Refiner(TensorflowModel):
             conv3 = tf.nn.conv2D(resnet_output, l3_filter, padding='SAME')
            #conv3 = tf.layers.batch_normalization(conv3, training=self._training)
            # conv3 = tf.contrib.layers.dropout(conv3, keep_prob=0.8, is_training=self._training)
-        
+            self.lastLayer = conv3
         # activation function
         with tf.variable_scope('refiner_fc') as scope:
-            output = tf.nn.tanh(conv3, self._num_output_features)
-        return output, conv3
+            self.results = tf.nn.tanh(conv3, self._num_output_features)
+        return self
 
     @define_scope
     def optimize(self):
-        logprob = tf.log(self.predictions + 1e-12)
-        cross_entropy = -tf.reduce_sum(self.output_tensor * logprob)
-        optimizer = tf.train.RMSPropOptimizer(0.03)
-        return optimizer.minimize(cross_entropy)
+        optimizer = tf.train.AdamOptimizer(0.001)
+        return optimizer.minimize(self.loss)
    
     @define_scope
     def loss(self):
         # self._target_tensor: output of discriminator on the synthetic data; self._target_label: is the prediction label
         self._realism_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.output_tensor, self.target_label), [1, 2], name='realism_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.descrim_output, self.target_label), [1, 2], name='realism_loss')
         
         # self._output_tensor: output of refiner on the synthetic data; self.input_tensor: synthetic data
-        self._regularization_loss = reg_scale * tf.reduce_sum(tf.abs(self.output_tensor - self.input_tensor), [1, 2, 3], name="regularization_loss")
+        self._regularization_loss = reg_scale * tf.reduce_sum(tf.abs(self.results - self.input_tensor), [1, 2, 3], name="regularization_loss")
 
         return tf.reduce_mean(realism_loss + self._regularization_loss)
 

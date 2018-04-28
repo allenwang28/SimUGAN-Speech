@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import sys
+from tqdm import trange
 
 import tensorflow as tf 
 from tensorflow.examples.tutorials.mnist import input_data
@@ -58,7 +59,7 @@ if __name__ == "__main__":
 
 
     # Start training
-    for epoch in range(NUM_EPOCHS):
+    for epoch in trange(NUM_EPOCHS):
         if epoch % BACKUP_RATE == 0:
             backup_num = epoch / BACKUP_RATE
             model_backup_save_path = os.path.join(model_save_dir, 'backup-{0}.cpkt'.format(backup_num))
@@ -72,16 +73,26 @@ if __name__ == "__main__":
 
         num_batches = int(mnist.train.num_examples/BATCH_SIZE)
         # Train
-        for i in range(num_batches):
+        for i in trange(num_batches):
             # Load batch
             batch_xs, batch_ys = mnist.train.next_batch(BATCH_SIZE)
             
             # Create map for batch to graph
-            feed_dict = { clf.input_tensor : batch_xs,
-                          clf.output_tensor : batch_ys }
+            feed_dict = { refiner_clf.input_tensor : batch_xs,
+                          refiner_clf.target_label : batch_ys,
+                          refiner_clf.descrim_output : discrim_clf.D_R_x_logits }
 
-            # Run optimizer, get cost, and summarize
-            _, l, summary = sess.run([clf.optimize, clf.loss, merged_summary_op], feed_dict=feed_dict)
+            # train both networks
+            for k in xrange(2):
+                _, l, summary = sess.run([refiner_clf.optimize, merged_summary_op], feed_dict=feed_dict)
+
+            feed_dict = { discrim_clf.input_tensor : refiner_clf.results,
+                          discrim_clf.output_tensor : batch_ys }
+
+            for k in xrange(1):
+                _, l, summary = sess.run([discrim_clf.optimize, merged_summary_op], feed_dict=feed_dict)
+
+
             summary_writer.add_summary(summary, epoch * num_batches + i)
 
     save_path = saver.save(sess, model_save_path)

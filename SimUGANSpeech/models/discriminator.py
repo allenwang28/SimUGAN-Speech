@@ -51,29 +51,26 @@ class Discriminator(TensorflowModel):
             conv5 = tf.nn.conv2D(conv4, l5_filter, padding='SAME')
             #conv5 = tf.layers.batch_normalization(conv5, training=self._training)
             #conv5 = tf.contrib.layers.dropout(conv5, keep_prob=0.8, is_training=self._training)
+            self.lastLayer = conv5
         # softmax 
         with tf.variable_scope('discrim_softmax') as scope:
-            output = tf.nn.softmax(conv5, self._num_output_features)
-        return output, conv5
+            self.results = tf.nn.softmax(conv5, self._num_output_features)
+        return self
 
     @define_scope
     def optimize(self):
-        logprob = tf.log(self.predictions + 1e-12)
-        cross_entropy = -tf.reduce_sum(self.output_tensor * logprob)
-        optimizer = tf.train.RMSPropOptimizer(0.03)
-        return optimizer.minimize(cross_entropy)
+        optimizer = tf.train.AdamOptimizer(0.001)
+        return optimizer.minimize(self.loss)
 
     @define_scope
     def loss(self):
-        # use log loss objective function
-        return tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.output_tensor, self.output_label), [1, 2], name=self._loss_name)
-
-        # self._target_tensor: discriminator 
+        # self._target_tensor: fake labels of discriminator output 
         self.refiner_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.output_tensor, self.output_label), [1, 2], name='refiner_d_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.synethic_output, self.synethic_label), [1, 2], name='refiner_d_loss')
+        
+        # self.target_label: real label of real data
         self.synthetic_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.D_y_logits), "synthetic_d_loss")
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.real_layer_output, self.real_label, "synthetic_d_loss")
 
       return tf.reduce_mean(self.refiner_d_loss + self.synthetic_d_loss, name="discrim_loss")
 
