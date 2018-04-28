@@ -140,6 +140,7 @@ class SpeechBatchGenerator(object):
 
         self._validation_data, self._training_data = randomly_split(training_data, validation_pct)
         self.num_training_samples = len(self._training_data)
+        self.num_batches = int(np.ceil(self.num_training_samples / self._batch_size))
 
         self._training_batch_generator = self.data_batch_generator(self._training_data)
 

@@ -10,13 +10,13 @@ Todo:
     * write the infer function
 
 """
-from SimUGANSpeech.tf_session.tf_session import TensorflowSession
+from SimUGANSpeech.tf_session import TensorflowSession
 
 import os
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
-from SimUGANSpeech.models.simple import SimpleNN
+from SimUGANSpeech.models import SimpleNN
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 
 class MnistSession(TensorflowSession):
