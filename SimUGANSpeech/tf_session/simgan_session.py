@@ -1,7 +1,7 @@
 # -*- coding: utf-8 *-* 
-"""MnistSession class 
+"""SimGAN Session class 
 
-A class that used to train for the Mnist task 
+A class that used to train for the SimGAN spectogram task 
 
 Using the TensorflowSession as an abstract class should make
 implementation more straightforward
@@ -48,9 +48,23 @@ class MnistSession(TensorflowSession):
         chunk_pct = 0.2
         num_epochs = 100
 
+        # specify classifier parameters
+        input_shape = (batch_size, 200, feature_sizes[0], 1)
+        output_shape = (batch_size, feature_sizes[1], 26)
 
 
-        self.clf = SimpleNN(input_shape, output_shape, verbose=True)
+        # construct classifier
+        self.discrim_clf = Discriminator(input_shape, output_shape, verbose=True)
+        self.refiner_clf = Refiner(input_shape, output_shape, verbose=True)
+
+        self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
+                                                     testing_folder_names,
+                                                     feature_sizes=feature_sizes,
+                                                     batch_size=batch_size,
+                                                     chunk_pct=chunk_pct,
+                                                     validation_pct=validation_pct,
+                                                     verbose=verbose)        
+
         self.summary_op = tf.summary.merge_all()
 
 
@@ -84,26 +98,37 @@ class MnistSession(TensorflowSession):
                 if epoch % display_rate == 0:
                     print ("Test error: {:6.2f}%".format(100 * self.test()))
                     
-            num_batches = int(self.mnist.train.num_examples/batch_size)
+            num_batches = self.librispeech.num_batches
 
             for i in range(num_batches):
                 # Load batch
-                batch_xs, batch_ys = self.mnist.train.next_batch(batch_size)
+                batch_mfcc, batch_transcriptions = self.librispeech.get_training_batch()
+                batch_transcriptions = one_hot_transcriptions(batch_transcriptions)
                 
                 # Create map for batch to graph
-                feed_dict = { self.clf.input_tensor : batch_xs,
-                              self.clf.output_tensor : batch_ys }
+                feed_dict = { self.refiner_clf.input_tensor : batch_mfcc,
+                              self.refiner_clf.output_tensor : batch_transcriptions }
 
-                # Run optimizer, get cost, and summarize
-                _, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
+                # train REFINER and discri networks
+                for k in xrange(2):
+                    _, l, summary = self.sess.run([self.refiner_clf.optimize, self.summary_op], feed_dict=feed_dict)
+
+                feed_dict = { self.discrim_clf.input_tensor : self.refiner_clf.results, 
+                              self.discrim_clf.output_tensor : batch_transcriptions }
+
+                for k in xrange(1):
+                    _, l, summary = sess.run([self.discrim_clf.optimize, self.summary_op], feed_dict=feed_dict)
+
+                # Summarize
                 self.summary_writer.add_summary(summary, epoch * num_batches + i)
 
         self.save_checkpoint()
 
     def test(self):
         """Return the error for the current model."""
-        images, labels = self.mnist.test.images, self.mnist.test.labels
-        error = self.sess.run(self.clf.error, {self.clf.input_tensor : images, self.clf.output_tensor: labels})
+        mfcc, transcriptions = self.librispeech.get_validation_data()
+        transcriptions = one_hot_transcriptions(transcriptions)
+        error = self.sess.run(self.clf.error, {self.clf.input_tensor : mfcc, self.clf.output_tensor: transcriptions})
         return error
              
     def infer(self):
