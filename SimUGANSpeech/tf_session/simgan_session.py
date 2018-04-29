@@ -16,6 +16,9 @@ import os
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
+from SimUGANSpeech.data import LibriSpeechBatchGenerator
+from SimUGANSpeech.data import SyntheticSpeechBatchGenerator
+
 from SimUGANSpeech.models import SimpleNN
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 
@@ -63,7 +66,15 @@ class MnistSession(TensorflowSession):
                                                      batch_size=batch_size,
                                                      chunk_pct=chunk_pct,
                                                      validation_pct=validation_pct,
-                                                     verbose=verbose)        
+                                                     verbose=verbose)     
+
+        self.syntheticspeech = SyntheticSpeechBatchGenerator(training_folder_names,
+                                                     testing_folder_names,
+                                                     feature_sizes=feature_sizes,
+                                                     batch_size=batch_size,
+                                                     chunk_pct=chunk_pct,
+                                                     validation_pct=validation_pct,
+                                                     verbose=verbose)  
 
         self.summary_op = tf.summary.merge_all()
 
@@ -101,26 +112,32 @@ class MnistSession(TensorflowSession):
             num_batches = self.librispeech.num_batches
 
             for i in range(num_batches):
-                # Load batch
+                # Load realbatch
                 batch_mfcc, batch_transcriptions = self.librispeech.get_training_batch()
                 batch_transcriptions = one_hot_transcriptions(batch_transcriptions)
+
+                # load synthetic data batch
+                batch_synthetic, batch_syn_trans = self.syntheticspeech.get_training_batch()
                 
                 # Create map for batch to graph
-                feed_dict = { self.refiner_clf.input_tensor : batch_mfcc,
-                              self.refiner_clf.output_tensor : batch_transcriptions }
+                feed_dict = { self.refiner_clf.input_tensor : batch_synthetic,
+                              self.refiner_clf.output_tensor : batch_syn_trans }
 
                 # train REFINER and discri networks
                 for k in xrange(2):
                     _, l, summary = self.sess.run([self.refiner_clf.optimize, self.summary_op], feed_dict=feed_dict)
 
                 feed_dict = { self.discrim_clf.input_tensor : self.refiner_clf.results, 
-                              self.discrim_clf.output_tensor : batch_transcriptions }
+                              self.discrim_clf.output_tensor : batch_syn_trans,
+                              self.discrim_clf.real_data : batch_mfcc,
+                              self.discrim_clf.real_label: batch_transcriptions }
 
                 for k in xrange(1):
                     _, l, summary = sess.run([self.discrim_clf.optimize, self.summary_op], feed_dict=feed_dict)
 
                 # Summarize
                 self.summary_writer.add_summary(summary, epoch * num_batches + i)
+
 
         self.save_checkpoint()
 
