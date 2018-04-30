@@ -97,7 +97,7 @@ class Wav2LetterSession(TensorflowSession):
             if self._verbose: 
                 if epoch % display_rate == 0:
                     # print ("Test error: {:6.2f}%".format(100 * self.test()))
-                    print ("blah")
+                    print ("epoch {0}".format(epoch))
                     
             num_batches = self.librispeech.num_batches
 

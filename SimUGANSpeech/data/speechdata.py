@@ -216,7 +216,7 @@ class SpeechBatchGenerator(object):
         while True:
             indices = list(range(len(data)))
 
-            while indices:
+            while len(indices) > self._batch_size:
                 indices_batch = randomly_sample_stack(indices, self._batch_size)
                 batch = [data[i] for i in indices_batch]
                 yield list(map(list, zip(*batch)))
