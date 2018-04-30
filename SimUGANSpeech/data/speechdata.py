@@ -117,6 +117,7 @@ class SpeechBatchGenerator(object):
                 The lower the value, the less likely to reach a memory error.
                 The higher the value, the more efficient the batch generator
                 Defaults to 0.3
+                If None provided, all data is loaded at once with no batch generator.
             verbose (:obj:`bool`, optional): Whether or not to print statements.
                 Defaults to True.
         
@@ -142,7 +143,10 @@ class SpeechBatchGenerator(object):
         self.num_training_samples = len(self._training_data)
         self.num_batches = int(np.ceil(self.num_training_samples / self._batch_size))
 
-        self._training_batch_generator = self.data_batch_generator(self._training_data)
+        if chunk_pct:
+            self._training_batch_generator = self.chunk_data_batch_generator(self._training_data)
+        else:
+            self._training_batch_generator = self.data_batch_generator(self._training_data)
 
         self._audio_params = audio_params
 
@@ -177,19 +181,48 @@ class SpeechBatchGenerator(object):
                 feature_data.append(pad_or_truncate(transcriptions, feature_size))
         return list(zip(*(feature_data)))
 
+
     def get_training_batch(self):
         """Get a batch of training data"""
         return next(self._training_batch_generator)
 
+
     def get_test_data(self):
         """Get all testing data"""
-        return self._get_speech_data_features(self._test_data)
+        return list(map(list, zip(*self._get_speechdata_features(self._test_data))))
+
 
     def get_validation_data(self):
         """Get all validation data"""
-        return self._get_speech_data_features(self._validation_data)
+        return list(map(list, zip(*self._get_speechdata_features(self._validation_data))))
+
 
     def data_batch_generator(self, speech_data):
+        """Generator that randomly yields features 
+
+        This batch generator differs in that all features are loaded 
+        immediately, not in chunks. This should be used for smaller features
+        (like transcriptions, ids, mfccs) and not larger features
+        (like spectrograms). 
+
+        Args:
+            speech_data (list of str): The speech data
+        
+        Yields:
+            list of lists: Shape = (num_features, batch_size)
+
+        """
+        data = self._get_speechdata_features(speech_data)
+        while True:
+            indices = list(range(len(data)))
+
+            while indices:
+                indices_batch = randomly_sample_stack(indices, self._batch_size)
+                batch = [data[i] for i in indices_batch]
+                yield list(map(list, zip(*batch)))
+
+
+    def chunk_data_batch_generator(self, speech_data):
         """Generator that randomly yields features in chunks
 
         Batch generator that yields features specified during initialization.
@@ -204,6 +237,9 @@ class SpeechBatchGenerator(object):
             2. Randomly sample from C
             3. When all samples are exhausted (C is empty, or has 
                less samples than batch size), go back to 1
+        
+        Args:
+            speech_data (list of str): The speech data
 
         Yields:
             list of lists: Shape = (num_features, batch_size)

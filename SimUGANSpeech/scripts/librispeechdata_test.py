@@ -13,16 +13,18 @@ if __name__ == "__main__":
 
     features = [
                  'mfcc',
+                 'transcription'
                ]
 
     feature_sizes = [
                       200, 
+                      100,
                     ]
 
-    batch_size = 1
+    batch_size = 2
     verbose = True
 
-    chunk_pct=0.3
+    chunk_pct=None
     num_iterations = 3
 
     audio_params = AudioParams()
@@ -42,6 +44,9 @@ if __name__ == "__main__":
         assert (len(batch[0]) == batch_size)
 
         spectrograms = batch[0]
+        transcriptions = batch[1]
+        print (transcriptions)
+
         first_spectrogram = spectrograms[0]
 
         print (first_spectrogram.shape)

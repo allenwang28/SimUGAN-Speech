@@ -13,6 +13,7 @@ Todo:
 """
 import numpy as np
 import copy
+import tensorflow as tf
 
 from deco import concurrent, synchronized
 
@@ -92,7 +93,6 @@ def randomly_split(l, first_pct_size):
         tuple of lists: two lists, of sizes:
             (first_pct_size * N, (1 - first_pct_size) * N)
     """
-    print (first_pct_size)
     return randomly_split_list_to_sizes(l, [first_pct_size])
 
 
@@ -133,7 +133,22 @@ def pad_or_truncate(data, length):
     return [rmap[i] for i in range(len(rmap))]
 
 
+def letter_to_id(letter):
+    if letter == ' ':
+        return 27
+    if letter == '\'':
+        return 26
+    return ord(letter) - ord('A')
+
+
 def text_to_indices(text): 
     """Convert a string to a list of indices"""
-    return np.fromstring(text, dtype=np.uint8) - 97
+    return [letter_to_id(letter) for letter in text.upper()]
+
+
+def one_hot_transcriptions(transcriptions, vocabulary_size):
+    """One hot encode transcriptions"""
+    t_idx = np.array([text_to_indices(transcription) for transcription in transcriptions])
+    return tf.one_hot(t_idx, vocabulary_size, dtype=tf.uint8)
+
 

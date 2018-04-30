@@ -1,8 +1,8 @@
 # -*- coding: utf-8 *-* 
-"""ASRSession class 
+"""wav2lettersession 
 
-A class that used to train for simple speech recognition
-using LibriSpeech
+A class used to train for speech recognition using LibriSpeech
+and Wav2Letter
 
 """
 
@@ -10,19 +10,16 @@ from SimUGANSpeech.tf_session import TensorflowSession
 
 import os
 import tensorflow as tf
+import numpy as np
 
 from SimUGANSpeech.data import LibriSpeechBatchGenerator
-from SimUGANSpeech.models import SimpleNN
+from SimUGANSpeech.models import Wav2Letter
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
-from SimUGANSpeech.util.data_util import text_to_indices
+from SimUGANSpeech.util.data_util import one_hot_transcriptions 
 
-def one_hot_transcriptions(transcriptions):
-    """One hot encode transcriptions"""
-    t_idx = [text_to_indices(transcription) for transcription in transcriptions]
-    return tf.one_hot(t_idx, 26, dtype=tf.uint8)
+vocabulary_size = 28
 
-
-class SimpleASRSession(TensorflowSession):
+class Wav2LetterSession(TensorflowSession):
     @property
     def name(self):
         """Name of the session"""
@@ -32,13 +29,13 @@ class SimpleASRSession(TensorflowSession):
     @property
     def logs_path(self):
         """Path to save Tensorboard logs"""
-        return os.path.join(TF_LOGS_DIR, 'simpleasr')
+        return os.path.join(TF_LOGS_DIR, 'Wav2LetterSession')
 
 
     @property
     def session_save_dir(self):
         """Path to save session checkpoints"""
-        return os.path.join(TENSORFLOW_DIR, 'simpleasrsession')
+        return os.path.join(TENSORFLOW_DIR, 'Wav2LetterSession')
 
 
     def initialize(self):
@@ -49,23 +46,24 @@ class SimpleASRSession(TensorflowSession):
         feature_sizes = [ 1200, 100 ]
         batch_size = 10
         verbose = True
-        chunk_pct = 0.2
+        chunk_pct = None
         num_epochs = 100
         validation_pct = 0.3
         num_mfcc_features = 40
 
-        input_shape = (batch_size, num_mfcc_features, feature_sizes[0], 1)
-        output_shape = (batch_Size, feature_sizes[1], 26)
+        input_shape = (batch_size, feature_sizes[0], num_mfcc_features)
+        output_shape = (batch_size, feature_sizes[1], vocabulary_size)
 
         self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
                                                      testing_folder_names,
+                                                     features,
                                                      feature_sizes=feature_sizes,
                                                      batch_size=batch_size,
                                                      chunk_pct=chunk_pct,
                                                      validation_pct=validation_pct,
                                                      verbose=verbose)
 
-        self.clf = SimpleASR(input_shape, output_shape, verbose=True)
+        self.clf = Wav2Letter(input_shape, output_shape, verbose=True)
         self.summary_op = tf.summary.merge_all()
 
 
@@ -89,7 +87,7 @@ class SimpleASRSession(TensorflowSession):
         for epoch in range(num_epochs):
             # Create a checkpoint
             if epoch % backup_rate == 0:
-                backup_number = epoch / backup_rate
+                backup_number = int(epoch / backup_rate)
                 if self._verbose:
                     print ("Saving checkpoint {0}".format(backup_number))
                     self.save_checkpoint(backup_number)
@@ -97,29 +95,33 @@ class SimpleASRSession(TensorflowSession):
             # Display loss information
             if self._verbose: 
                 if epoch % display_rate == 0:
-                    print ("Test error: {:6.2f}%".format(100 * self.test()))
+                    # print ("Test error: {:6.2f}%".format(100 * self.test()))
+                    print ("blah")
                     
             num_batches = self.librispeech.num_batches
 
             for i in range(num_batches):
                 # Load batch
-                batch_mfcc, batch_transcriptions = self.librispeech.get_training_batch()
-                batch_transcriptions = one_hot_transcriptions(batch_transcriptions)
+                batch = self.librispeech.get_training_batch()
+                batch_mfcc, batch_transcriptions = batch[0], batch[1]
+                batch_transcriptions = one_hot_transcriptions(batch_transcriptions, vocabulary_size)
                 
                 # Create map for batch to graph
                 feed_dict = { self.clf.input_tensor : batch_mfcc,
                               self.clf.output_tensor : batch_transcriptions }
 
                 # Run optimizer, get cost, and summarize
-                _, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
-                self.summary_writer.add_summary(summary, epoch * num_batches + i)
+                self.sess.run(self.clf.optimize, feed_dict=feed_dict)
+                #_, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
+                #self.summary_writer.add_summary(summary, epoch * num_batches + i)
 
         self.save_checkpoint()
 
     def test(self):
         """Return the error for the current model."""
-        mfcc, transcriptions = self.librispeech.get_validation_data()
-        transcriptions = one_hot_transcriptions(transcriptions)
+        batch = self.librispeech.get_validation_data()
+        mfcc, transcriptions = batch[0], batch[1]
+        transcriptions = one_hot_transcriptions(transcriptions, vocabulary_size)
         error = self.sess.run(self.clf.error, {self.clf.input_tensor : mfcc, self.clf.output_tensor: transcriptions})
         return error
 
