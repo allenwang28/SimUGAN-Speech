@@ -42,8 +42,8 @@ class Refiner(TensorflowModel):
         # resnet
         with tf.variable_scope('refiner_resnet') as scope:
             num_outputs = 64
-            l2_kernel = [3, 3]
-            l2_stride = [1, 1]
+            kernel_size = [3, 3]
+            stride = [1, 1]
 
             # resnet block 1
             layer = slim.conv2d(conv1, num_outputs, kernel_size, stride,
