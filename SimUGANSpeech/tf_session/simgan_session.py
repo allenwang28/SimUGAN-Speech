@@ -19,10 +19,12 @@ from tensorflow.examples.tutorials.mnist import input_data
 from SimUGANSpeech.data import LibriSpeechBatchGenerator
 from SimUGANSpeech.data import SyntheticSpeechBatchGenerator
 
-from SimUGANSpeech.models import SimpleNN
+from SimUGANSpeech.models import Refiner
+from SimUGANSpeech.models import Discriminator
+
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 
-class MnistSession(TensorflowSession):
+class SimGANSession(TensorflowSession):
     @property 
     def name(self):
         """Name of the session"""
@@ -50,15 +52,16 @@ class MnistSession(TensorflowSession):
         verbose = True
         chunk_pct = 0.2
         num_epochs = 100
+        validation_pct = 0.8
 
         # specify classifier parameters
         input_shape = (batch_size, 200, feature_sizes[0], 1)
         output_shape = (batch_size, feature_sizes[1], 26)
 
-
         # construct classifier
-        self.discrim_clf = Discriminator(input_shape, output_shape, verbose=True)
-        self.refiner_clf = Refiner(input_shape, output_shape, verbose=True)
+        self.discrim_clf = Discriminator(self, input_shape, output_shape, verbose=True)
+        self.refiner_clf = Refiner(self, input_shape, output_shape, verbose=True)
+
 
         self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
                                                      testing_folder_names,
@@ -125,7 +128,7 @@ class MnistSession(TensorflowSession):
 
                 # train REFINER and discri networks
                 for k in xrange(2):
-
+                    print "Running Refiner..."
                     _, l, summary = self.sess.run([self.refiner_clf.optimize, self.summary_op], feed_dict=feed_dict)
 
 
@@ -133,6 +136,8 @@ class MnistSession(TensorflowSession):
                             self.discrim_clf.output_tensor : batch_syn_trans }
 
                 for k in xrange(1):
+                    print "Running Descriminator..."
+
                     self.discrim_clf.D_y, self.discrim_clf.D_y_logits = self.discrim_clf.predictions(self.discrim_clf.real_data)
                     self.discrim_clf.D_R_x, self.discrim_clf.D_R_x_logits = self.discrim_clf.predictions(self.discrim_clf.input_tensor)
 
