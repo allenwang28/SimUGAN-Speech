@@ -14,8 +14,8 @@ class Discriminator(TensorflowModel):
                  input_shape,
                  output_shape,
                  verbose=True):
-        self.fake_logits = tf.placeholder(tf.int, shape=output_shape)
-        self.real_logits = tf.placeholder(tf.int, shape=output_shape)
+        self.fake_logits = tf.placeholder(tf.int32, shape=output_shape)
+        self.real_logits = tf.placeholder(tf.int32, shape=output_shape)
         super().__init__(input_shape, output_shape, verbose=verbose)
 
     @property
@@ -24,17 +24,17 @@ class Discriminator(TensorflowModel):
         return "Discriminator"
 
     @define_scope(initializer=tf.contrib.slim.xavier_initializer())
-    def predictions(self, layer):
+    def predictions(self):
         # conv1
         with tf.variable_scope('discrim_conv1') as scope:
             l1_filter = tf.get_variable('discrim_l1_filter', shape=(96, 3, 2))
-            conv1 = tf.nn.conv2D(layer, l1_filter, padding='SAME')
+            conv1 = tf.nn.conv2d(self.input_tensor, l1_filter, padding='SAME')
             #conv1 = tf.layers.batch_normalization(conv1, training=self._training)
             #conv1 = tf.contrib.layers.dropout(conv1, keep_prob=0.8, is_training=self._training)
         # conv2
         with tf.variable_scope('discrim_conv2') as scope:
             l2_filter = tf.get_variable('discrim_l2_filter', shape=(64, 3, 2))
-            conv2 = tf.nn.conv2D(conv1, l2_filter, padding='SAME')
+            conv2 = tf.nn.conv2d(conv1, l2_filter, padding='SAME')
             #conv2 = tf.layers.batch_normalization(conv2, training=self._training)
             #conv2 = tf.contrib.layers.dropout(conv2, keep_prob=0.8, is_training=self._training)
         # max pooling
@@ -44,19 +44,19 @@ class Discriminator(TensorflowModel):
         # conv3
         with tf.variable_scope('discrim_conv3') as scope:
             l3_filter = tf.get_variable('discrim_l3_filter', shape=(32, 3, 1))
-            conv3 = tf.nn.conv2D(max1, l3_filter, padding='SAME')
+            conv3 = tf.nn.conv2d(max1, l3_filter, padding='SAME')
             #conv3 = tf.layers.batch_normalization(conv3, training=self._training)
             #conv3 = tf.contrib.layers.dropout(conv3, keep_prob=0.8, is_training=self._training)
         # conv4
         with tf.variable_scope('discrim_conv4') as scope:
             l4_filter = tf.get_variable('discrim_l4_filter', shape=(32, 1, 1))
-            conv4 = tf.nn.conv2D(conv3, l4_filter, padding='SAME')
+            conv4 = tf.nn.conv2d(conv3, l4_filter, padding='SAME')
             #conv4 = tf.layers.batch_normalization(conv4, training=self._training)
             #conv4 = tf.contrib.layers.dropout(conv4, keep_prob=0.8, is_training=self._training)
         # conv5
         with tf.variable_scope('discrim_conv5') as scope:
             l5_filter = tf.get_variable('discrim_l5_filter', shape=(2, 1, 1))
-            conv5 = tf.nn.conv2D(conv4, l5_filter, padding='SAME')
+            conv5 = tf.nn.conv2d(conv4, l5_filter, padding='SAME')
             #conv5 = tf.layers.batch_normalization(conv5, training=self._training)
             #conv5 = tf.contrib.layers.dropout(conv5, keep_prob=0.8, is_training=self._training)
         # softmax 
