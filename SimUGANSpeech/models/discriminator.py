@@ -10,6 +10,14 @@ from SimUGANSpeech.models.tf_decorate import define_scope
 from SimUGANSpeech.models.tf_class import TensorflowModel
 
 class Discriminator(TensorflowModel):
+    def __init__(self,
+                 input_shape,
+                 output_shape,
+                 verbose=True):
+        self.fake_logits = tf.placeholder(tf.int, shape=output_shape)
+        self.real_logits = tf.placeholder(tf.int, shape=output_shape)
+        super().__init__(input_shape, output_shape, verbose=verbose)
+
     @property
     def name(self):
         """Name of the model"""
@@ -64,13 +72,15 @@ class Discriminator(TensorflowModel):
     @define_scope
     def loss(self):
         # self._target_tensor: fake labels of discriminator output 
-        self.refiner_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.fake_output, self.fake_label), [1, 2], name='refiner_d_loss')
+        real_label = tf.ones_like(self.output_tensor)[:,:,:,0]
+        fake_label = tf.zeros_like(self.output_tensor)[:,:,:,0]
+        refiner_d_loss = tf.reduce_sum(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.fake_logits, fake_label), [1, 2], name='refiner_d_loss')
         
         # self.target_label: real label of real data
-        self.synthetic_d_loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(self.real_output, self.real_label), "synthetic_d_loss")
+        synthetic_d_loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(self.real_logits, real_label), "synthetic_d_loss")
 
-        return tf.reduce_mean(self.refiner_d_loss + self.synthetic_d_loss, name="discrim_loss")
+        return tf.reduce_mean(refiner_d_loss + synthetic_d_loss, name="discrim_loss")
 
     @define_scope
     def error(self):

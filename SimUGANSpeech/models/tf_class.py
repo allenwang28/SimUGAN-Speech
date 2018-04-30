@@ -37,7 +37,7 @@ class TensorflowModel(object):
         self._output_shape = output_shape
         self._max_input_length = input_shape[1]
         self._max_output_length = output_shape[1]
-        self._batch_size = tf.placeholder(tf.int32, shape=(input_shape[0]))
+        self._batch_size = input_shape[0]
         self._training = True 
 
         self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)

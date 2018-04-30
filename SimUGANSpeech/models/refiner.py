@@ -14,6 +14,18 @@ from SimUGANSpeech.models.tf_decorate import define_scope
 from SimUGANSpeech.models.tf_class import TensorflowModel
 
 class Refiner(TensorflowModel):
+    def __init__(self,
+                 input_shape,
+                 output_shape,
+                 reg_scale=0.1,
+                 learning_rate=0.001,
+                 verbose=True):
+        batch_size = input_shape[0]
+        self.discriminator_output = tf.placeholder(tf.float32, shape=(batch_size, 1))
+        self.reg_scale = reg_scale
+        self.learning_rate = learning_rate
+        super().__init__(input_shape, output_shape, verbose=verbose)
+
     @property
     def name(self):
         """Name of the model"""
@@ -75,28 +87,27 @@ class Refiner(TensorflowModel):
             conv3 = tf.nn.conv2D(resnet_output, l3_filter, padding='SAME')
            #conv3 = tf.layers.batch_normalization(conv3, training=self._training)
            # conv3 = tf.contrib.layers.dropout(conv3, keep_prob=0.8, is_training=self._training)
-            self.lastLayer = conv3
         # activation function
         with tf.variable_scope('refiner_fc') as scope:
-            self.results = tf.nn.tanh(conv3, self._num_output_features)
-        return self
+            results = tf.nn.tanh(conv3, self._num_output_features)
+        return results
+
 
     @define_scope
     def optimize(self):
-        optimizer = tf.train.AdamOptimizer(0.001)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate)
         return optimizer.minimize(self.loss)
+
    
     @define_scope
     def loss(self):
         # self._target_tensor: output of discriminator on the synthetic data; self._target_label: is the prediction label
-        self._realism_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.descrim_output, self.target_label), [1, 2], name='realism_loss')
-        
+        target_label = tf.ones_like(self.discriminator_output)[:,:,:,0]
+        realism_loss = tf.reduce_sum(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.discriminator_output, target_label), [1, 2], name='realism_loss')
         # self._output_tensor: output of refiner on the synthetic data; self.input_tensor: synthetic data
-        self._regularization_loss = reg_scale * tf.reduce_sum(tf.abs(self.results - self.input_tensor), [1, 2, 3], name="regularization_loss")
-
+        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.predictions - self.input_tensor), [1, 2, 3], name="regularization_loss")
         return tf.reduce_mean(realism_loss + self._regularization_loss)
-
 
 
     @define_scope

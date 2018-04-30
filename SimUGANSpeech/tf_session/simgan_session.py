@@ -47,7 +47,8 @@ class SimGANSession(TensorflowSession):
         training_folder_names = [ 'dev-clean' ]
         testing_folder_names = []
 
-        feature_sizes = [ 1200, 100 ]
+        features = [ 'spectrogram' ] 
+        feature_sizes = [ 1200]
         batch_size = 10
         verbose = True
         chunk_pct = 0.2
@@ -55,16 +56,26 @@ class SimGANSession(TensorflowSession):
         validation_pct = 0.8
 
         # specify classifier parameters
-        input_shape = (batch_size, 200, feature_sizes[0], 1)
-        output_shape = (batch_size, feature_sizes[1], 26)
+        
+        # discriminator takes spectrograms as input
+        d_input_shape = (batch_size, feature_sizes[0], 200)
+         
+        # discriminator's output is a 0 or a 1
+        d_output_shape = (batch_size, 1)
+
+        # refiner takes spectrograms as input
+        r_input_shape = (batch_size, feature_sizes[0], 200)
+
+        # refiner outputs spectrograms
+        r_output_shape = (batch_size, feature_sizes[0], 200)
 
         # construct classifier
-        self.discrim_clf = Discriminator(self, input_shape, output_shape, verbose=True)
-        self.refiner_clf = Refiner(self, input_shape, output_shape, verbose=True)
-
+        self.discrim_clf = Discriminator(d_input_shape, d_output_shape, verbose=True)
+        self.refiner_clf = Refiner(r_input_shape, r_output_shape, verbose=True)
 
         self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
                                                      testing_folder_names,
+                                                     features,
                                                      feature_sizes=feature_sizes,
                                                      batch_size=batch_size,
                                                      chunk_pct=chunk_pct,
@@ -72,12 +83,13 @@ class SimGANSession(TensorflowSession):
                                                      verbose=verbose)     
 
         self.syntheticspeech = SyntheticSpeechBatchGenerator(training_folder_names,
-                                                     testing_folder_names,
-                                                     feature_sizes=feature_sizes,
-                                                     batch_size=batch_size,
-                                                     chunk_pct=chunk_pct,
-                                                     validation_pct=validation_pct,
-                                                     verbose=verbose)  
+                                                             testing_folder_names,
+                                                             features,
+                                                             feature_sizes=feature_sizes,
+                                                             batch_size=batch_size,
+                                                             chunk_pct=chunk_pct,
+                                                             validation_pct=validation_pct,
+                                                             verbose=verbose)  
 
         self.summary_op = tf.summary.merge_all()
 
@@ -85,8 +97,7 @@ class SimGANSession(TensorflowSession):
     def train(self,
               num_epochs,
               backup_rate=100,
-              display_rate=10,
-              batch_size=100):
+              display_rate=10):
         """Run the training loop for MNIST
 
         Args:
@@ -99,6 +110,9 @@ class SimGANSession(TensorflowSession):
                 minibatch
 
         """
+        num_synthetic_iterations = 10
+        num_real_iterations = 10
+
         for epoch in range(num_epochs):
             # Create a checkpoint
             if epoch % backup_rate == 0:
@@ -110,48 +124,49 @@ class SimGANSession(TensorflowSession):
             # Display loss information
             if self._verbose: 
                 if epoch % display_rate == 0:
-                    print ("Test error: {:6.2f}%".format(100 * self.test()))
+                    #print ("Test error: {:6.2f}%".format(100 * self.test()))
+                    # TODO 
+                    continue
                     
-            num_batches = self.librispeech.num_batches
 
-            for i in range(num_batches):
-                # Load realbatch
-                batch_mfcc, batch_transcriptions = self.librispeech.get_training_batch()
-                batch_transcriptions = one_hot_transcriptions(batch_transcriptions)
+            for j in range(num_synthetic_iterations):
+                # Sample a mini-batch of synthetic images x_i
+                synthetic_spectrograms = self.syntheticspeech.get_training_batch()[0]
 
-                # load synthetic data batch
-                batch_synthetic, batch_syn_trans = self.syntheticspeech.get_training_batch()
-                
-                # Create map for batch to graph
-                feed_dict = { self.refiner_clf.input_tensor : batch_synthetic,
-                              self.refiner_clf.output_tensor : batch_syn_trans }
+                feed_dict = { self.refiner_clf.input_tensor : synthetic_spectrograms }
+                refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
-                # train REFINER and discri networks
-                for k in xrange(2):
-                    print "Running Refiner..."
-                    _, l, summary = self.sess.run([self.refiner_clf.optimize, self.summary_op], feed_dict=feed_dict)
+                # Update theta by taking a SGD step on mini-batch loss L_r
+                feed_dict = { self.discrim_clf.input_tensor : refined_spectrograms }
+                discrim_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
 
+                feed_dict = { self.refiner_clf.output_tensor : discrim_logits }
 
-                feed_dict = { self.discrim_clf.input_tensor : self.refiner_clf.results, 
-                            self.discrim_clf.output_tensor : batch_syn_trans }
+                _, l, summary = sess.run([self.refiner_clf.optimize, self.refiner_clf.loss, self.summary_op],
+                                         feed_dict=feed_dict)
 
-                for k in xrange(1):
-                    print "Running Descriminator..."
+            for j in range(num_real_iterations):
+                # Sample a mini-batch of synthetic images x_i, and real images y_j
+                synthetic_spectrograms = self.syntheticspeech.get_training_batch()[0]
+                real_spectrograms = self.librispeech.get_training_batch()[0]
 
-                    self.discrim_clf.D_y, self.discrim_clf.D_y_logits = self.discrim_clf.predictions(self.discrim_clf.real_data)
-                    self.discrim_clf.D_R_x, self.discrim_clf.D_R_x_logits = self.discrim_clf.predictions(self.discrim_clf.input_tensor)
+                # Compute refined with current theta
+                feed_dict = { self.refiner_clf.input_tensor : synthetic_spectrograms }
+                refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
-                    feed_dict = { self.discrim_clf.fake_output : self.discrim_clf.D_R_x_logits, 
-                            self.discrim_clf.fake_label : self.discrim_clf.D_R_x,
-                            self.discrim_clf.real_output : self.discrim_clf.D_y_logits,
-                            self.discrim_clf.real_label: self.discrim_clf.D_y }
+                # Update phi by taking a SGD step on mini-batch loss L_d
+                feed_dict = { self.discrim_clf.input_tensor : refined_spectrograms }
+                fake_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
 
-                    _, l, summary = sess.run([self.discrim_clf.optimize, self.summary_op], feed_dict=feed_dict)
+                feed_dict = { self.discrim_clf.input_tensor : real_spectrograms }
+                real_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
 
-                # Summarize
-                self.summary_writer.add_summary(summary, epoch * num_batches + i)
+                feed_dict = { self.discrim_clf.fake_logits : fake_logits, self.discrim_clf.real_logits: real_logits } 
+                _, l, summary = sess.run([self.discrim_clf.optimize, self.discrim_clf.loss, self.summary_op],
+                                         feed_dict=feed_dict)
 
-
+            # Summarize
+            self.summary_writer.add_summary(summary, epoch * num_batches + i)
         self.save_checkpoint()
 
     def test(self):
