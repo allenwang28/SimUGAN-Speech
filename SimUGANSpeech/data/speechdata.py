@@ -18,7 +18,7 @@ import time
 import pickle
 import copy
 
-from SimUGANSpeech.util.data_util import randomly_sample_stack, pad_or_truncate, randomly_split 
+from SimUGANSpeech.util.data_util import randomly_sample_stack, truncate, pad_or_truncate, randomly_split
 from SimUGANSpeech.util.audio_util import get_audio_features 
 from SimUGANSpeech.preprocessing.audio import AudioParams
 
@@ -178,7 +178,7 @@ class SpeechBatchGenerator(object):
             elif feature == "id":
                 feature_data.append(ids)
             elif feature == "transcription":
-                feature_data.append(pad_or_truncate(transcriptions, feature_size))
+                feature_data.append(truncate(transcriptions, feature_size))
         return list(zip(*(feature_data)))
 
 

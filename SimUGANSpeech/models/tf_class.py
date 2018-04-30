@@ -21,6 +21,8 @@ class TensorflowModel(object):
     def __init__(self,
                  input_shape,
                  output_shape,
+                 input_tensor=None,
+                 output_tensor=None,
                  sparse_output=False,
                  verbose=True):
         """Initialize the model
@@ -38,14 +40,22 @@ class TensorflowModel(object):
         self._output_shape = output_shape
         self._max_input_length = input_shape[1]
         self._max_output_length = output_shape[1]
-        self._batch_size = tf.placeholder(tf.int32, shape=(input_shape[0]))
+        self._batch_size = input_shape[0]
         self.num_convolutional_layers = 0
 
-        self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)
-        if sparse_output:
-            self.output_tensor = tf.sparse_placeholder(tf.int32)
+        if input_tensor:
+            self.input_tensor = input_tensor
         else:
-            self.output_tensor = tf.placeholder(tf.float32, shape=output_shape)
+            self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)
+
+        if output_tensor:
+            self.output_tensor = output_tensor
+        else:
+            if sparse_output:
+                self.output_tensor = tf.sparse_placeholder(tf.int32)
+            else:
+                self.output_tensor = tf.placeholder(tf.float32, shape=output_shape)
+
         self.predictions
         self.optimize
         self.loss

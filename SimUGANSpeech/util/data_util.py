@@ -96,6 +96,11 @@ def randomly_split(l, first_pct_size):
     return randomly_split_list_to_sizes(l, [first_pct_size])
 
 
+def truncate(data, length):
+    return [s[:length] for s in data]
+
+
+
 @synchronized
 def pad_or_truncate(data, length):
     """Pads or truncates a list of data
@@ -138,6 +143,9 @@ def letter_to_id(letter):
         return 27
     if letter == '\'':
         return 26
+    ret = ord(letter) - ord('A')
+    if ret > 27:
+        raise ValueError("{0}".format(letter))
     return ord(letter) - ord('A')
 
 
@@ -146,9 +154,30 @@ def text_to_indices(text):
     return [letter_to_id(letter) for letter in text.upper()]
 
 
-def one_hot_transcriptions(transcriptions, vocabulary_size):
+def one_hot_transcriptions(transcriptions, vocabulary_size, session):
     """One hot encode transcriptions"""
     t_idx = np.array([text_to_indices(transcription) for transcription in transcriptions])
-    return tf.one_hot(t_idx, vocabulary_size, dtype=tf.uint8)
+    oh = tf.one_hot(t_idx, vocabulary_size, dtype=tf.uint8)
+    return session.run(oh)
 
+
+def tf_transcriptions(transcriptions, max_time):
+    transcriptions = [text_to_indices(transcription) for transcription in transcriptions]
+    transcription_shape = np.array([len(transcriptions), max_time], dtype=np.int)
+    transcription_indices = []
+    transcription_values = []
+    for transcription_idx, transcription in enumerate(transcriptions):
+        for id_idx, identifier in enumerate(transcription):
+            transcription_indices.append([transcription_idx, id_idx])
+            transcription_values.append(identifier)
+    transcription_indices = np.array(transcription_indices, dtype=np.int)
+    transcription_values = np.array(transcription_values, dtype=np.int)
+
+    print (transcription_indices)
+    print (transcription_values)
+    return tf.SparseTensorValue(transcription_indices, transcription_values, transcription_shape)
+
+
+def get_sequence_lengths(input_list):
+    return [len(l) for l in input_list]
 
