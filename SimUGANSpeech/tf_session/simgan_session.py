@@ -125,14 +125,22 @@ class MnistSession(TensorflowSession):
 
                 # train REFINER and discri networks
                 for k in xrange(2):
+
                     _, l, summary = self.sess.run([self.refiner_clf.optimize, self.summary_op], feed_dict=feed_dict)
 
+
                 feed_dict = { self.discrim_clf.input_tensor : self.refiner_clf.results, 
-                              self.discrim_clf.output_tensor : batch_syn_trans,
-                              self.discrim_clf.real_data : batch_mfcc,
-                              self.discrim_clf.real_label: batch_transcriptions }
+                            self.discrim_clf.output_tensor : batch_syn_trans }
 
                 for k in xrange(1):
+                    self.discrim_clf.D_y, self.discrim_clf.D_y_logits = self.discrim_clf.predictions(self.discrim_clf.real_data)
+                    self.discrim_clf.D_R_x, self.discrim_clf.D_R_x_logits = self.discrim_clf.predictions(self.discrim_clf.input_tensor)
+
+                    feed_dict = { self.discrim_clf.fake_output : self.discrim_clf.D_R_x_logits, 
+                            self.discrim_clf.fake_label : self.discrim_clf.D_R_x,
+                            self.discrim_clf.real_output : self.discrim_clf.D_y_logits,
+                            self.discrim_clf.real_label: self.discrim_clf.D_y }
+
                     _, l, summary = sess.run([self.discrim_clf.optimize, self.summary_op], feed_dict=feed_dict)
 
                 # Summarize

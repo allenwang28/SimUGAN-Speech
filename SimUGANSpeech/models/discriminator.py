@@ -66,11 +66,11 @@ class Discriminator(TensorflowModel):
     def loss(self):
         # self._target_tensor: fake labels of discriminator output 
         self.refiner_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.synethic_output, self.synethic_label), [1, 2], name='refiner_d_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.lastLayer, self.results), [1, 2], name='refiner_d_loss')
         
         # self.target_label: real label of real data
         self.synthetic_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(self.real_layer_output, self.real_label, "synthetic_d_loss")
+            tf.nn.sparse_softmax_cross_entropy_with_logits(self.real_data, self.real_label, "synthetic_d_loss")
 
       return tf.reduce_mean(self.refiner_d_loss + self.synthetic_d_loss, name="discrim_loss")
 
