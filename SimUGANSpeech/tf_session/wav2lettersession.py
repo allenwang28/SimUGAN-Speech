@@ -17,7 +17,7 @@ from SimUGANSpeech.models import Wav2Letter
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
 from SimUGANSpeech.util.data_util import tf_transcriptions, get_sequence_lengths
 
-vocabulary_size = 28
+vocabulary_size = 29
 
 class Wav2LetterSession(TensorflowSession):
     @property
@@ -43,10 +43,10 @@ class Wav2LetterSession(TensorflowSession):
         training_folder_names = [ 'dev-clean' ]
         testing_folder_names = []
         features = [ 'mfcc', 'transcription' ]
-        feature_sizes = [ 1200, 200 ]
+        feature_sizes = [ 1200, 10 ]
         batch_size = 10
         verbose = True
-        chunk_pct = 0.1 
+        chunk_pct = None
         validation_pct = 0.3
         num_mfcc_features = 40
 
@@ -118,6 +118,7 @@ class Wav2LetterSession(TensorflowSession):
 
                 # Run optimizer, get cost, and summarize
                 _, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
+                print (l)
                 self.summary_writer.add_summary(summary, epoch * num_batches + i)
 
         self.save_checkpoint()

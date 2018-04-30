@@ -59,10 +59,10 @@ class TensorflowModel(object):
         self.predictions
         self.optimize
         self.loss
-        self.error
+        #self.error
 
         tf.summary.scalar("{0}-loss".format(self.name), self.loss)
-        tf.summary.scalar("{0}-error".format(self.name), self.error)
+        #tf.summary.scalar("{0}-error".format(self.name), self.error)
 
 
     @property

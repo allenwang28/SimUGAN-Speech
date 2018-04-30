@@ -81,15 +81,18 @@ class Wav2Letter(TensorflowModel):
     @define_scope
     def loss(self):
         """Loss function"""
-        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor // 2)
+        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor)
         return tf.reduce_mean(cost, name='loss')
 
 
     @define_scope
     def error(self):
         """Error function"""
+        """
         # TODO - make this different from the loss
-        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor // 2)
+        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor // 2, ignore_longer_outputs_than_inputs=True)
         return tf.reduce_mean(cost, name='loss')
+        """
+        return None
 
 

@@ -144,7 +144,7 @@ def letter_to_id(letter):
     if letter == '\'':
         return 26
     ret = ord(letter) - ord('A')
-    if ret > 27:
+    if ret < 0 or ret > 27:
         raise ValueError("{0}".format(letter))
     return ord(letter) - ord('A')
 
@@ -172,9 +172,6 @@ def tf_transcriptions(transcriptions, max_time):
             transcription_values.append(identifier)
     transcription_indices = np.array(transcription_indices, dtype=np.int)
     transcription_values = np.array(transcription_values, dtype=np.int)
-
-    print (transcription_indices)
-    print (transcription_values)
     return tf.SparseTensorValue(transcription_indices, transcription_values, transcription_shape)
 
 
