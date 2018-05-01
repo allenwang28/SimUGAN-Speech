@@ -155,13 +155,9 @@ class SimGANSession(TensorflowSession):
                 refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
                 # Update phi by taking a SGD step on mini-batch loss L_d
-                feed_dict = { self.discrim_clf.input_tensor : refined_spectrograms }
-                fake_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
+                feed_dict = { self.discrim_clf.fake_input : refined_spectrograms,
+                              self.discrim_clf.real_input : real_spectrograms }
 
-                feed_dict = { self.discrim_clf.input_tensor : real_spectrograms }
-                real_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
-
-                feed_dict = { self.discrim_clf.fake_logits : fake_logits, self.discrim_clf.real_logits: real_logits } 
                 _, l, summary = sess.run([self.discrim_clf.optimize, self.discrim_clf.loss, self.summary_op],
                                          feed_dict=feed_dict)
 
