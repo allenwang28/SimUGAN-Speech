@@ -170,7 +170,8 @@ def remap_paths(save_dir, verbose):
     
     master_path = os.path.join(save_dir, 'master.pkl')
     master = pickle.load(open(master_path, 'rb'))
-    master['paths'] = [os.path.join(save_dir, os.path.basename(p)) for p in master['paths']]
+    basename = lambda x: re.compile(r'\\|\/').split(x)[-1]
+    master['paths'] = [os.path.join(save_dir, basename(p)) for p in master['paths']]
     pickle.dump(master, open(master_path, 'wb'))
 
 
