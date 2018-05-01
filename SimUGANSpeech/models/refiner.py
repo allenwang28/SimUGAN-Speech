@@ -18,37 +18,34 @@ class Refiner(TensorflowModel):
     def __init__(self,
                  input_shape,
                  output_shape,
+                 fake_logits,
                  reg_scale=0.1,
                  learning_rate=0.001,
                  verbose=True):
         batch_size = input_shape[0]
-
+        self.fake_logits = fake_logits
         self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)
-        self.discrim_output = self.construct(self.input_tensor, 'refiner', reuse=False)
-
         self.reg_scale = reg_scale
         self.learning_rate = learning_rate
 
-        self.optimize
-        self.loss
-
-        tf.summary.scalar("{0}-loss".format(self.name), self.loss)
-        # super().__init__(input_shape, output_shape, verbose=verbose)
+        super().__init__(input_shape, output_shape, verbose=verbose)
 
     @property
     def name(self):
         """Name of the model"""
         return "Refiner"
 
-    #@define_scope(initializer=tf.contrib.slim.xavier_initializer())
-    def construct(self, layer, name, reuse=True):
-        with tf.variable_scope(name, reuse=reuse) as sc:
+    @define_scope(initializer=tf.contrib.slim.xavier_initializer())
+    def predictions(self):
+        name=self.name
+
+        with tf.variable_scope(name) as sc:
             num_outputs = 64
             kernel_size = [3, 3]
             stride = [1, 1]
             padding = 'SAME'
 
-            layer = slim.conv2d(layer, 64, 3, 1, scope="conv_1")
+            layer = slim.conv2d(self.input_tensor, 64, 3, 1, scope="refiner_conv_1")
 
             #resnet block 1
             inputLayer = layer
@@ -136,23 +133,22 @@ class Refiner(TensorflowModel):
         with tf.variable_scope('refiner_fc') as scope:
             results = tf.nn.tanh(conv3)
         return conv3
-        """
+    """
 
     @define_scope
     def optimize(self):
-        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate, name='refiner_optimizer')
         return optimizer.minimize(self.loss)
 
    
     @define_scope
     def loss(self):
-
         # self._target_tensor: output of discriminator on the synthetic data; self._target_label: is the prediction label
-        target_label = tf.ones_like(self.discrim_output, dtype=tf.int32)[:,:,:,0]
+        target_label = tf.ones_like(self.fake_logits, dtype=tf.int32)[:,:,:,0]
         realism_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_label, logits=self.discrim_output), name='realism_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_label, logits=self.fake_logits), name='realism_loss')
         # self._output_tensor: output of refiner on the synthetic data; self.input_tensor: synthetic data
-        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.discrim_output - self.input_tensor), [1, 2, 3], name="regularization_loss")
+        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.predictions- self.input_tensor), [1, 2, 3], name="regularization_loss")
         return tf.reduce_mean(realism_loss + regularization_loss)
 
 

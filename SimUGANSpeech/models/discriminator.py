@@ -24,8 +24,8 @@ class Discriminator(TensorflowModel):
 
         self.fake_input = tf.placeholder(tf.float32, shape=input_shape)
         self.real_input = tf.placeholder(tf.float32, shape=input_shape)
-        self.fake, self.fake_logits = self.construct(self.fake_input, 'discrim', reuse=False)
-        self.real, self.real_logits = self.construct(self.real_input, 'discrim', reuse=True)
+        self.fake_logits = self.construct(self.fake_input, 'discrim', reuse=False)
+        self.real_logits = self.construct(self.real_input, 'discrim', reuse=True)
 
         self.optimize
         self.loss
@@ -86,7 +86,7 @@ class Discriminator(TensorflowModel):
 
     @define_scope
     def optimize(self):
-        optimizer = tf.train.AdamOptimizer(0.01)
+        optimizer = tf.train.AdamOptimizer(0.01, name='discrim_optimizer')
         return optimizer.minimize(self.loss)
 
     @define_scope

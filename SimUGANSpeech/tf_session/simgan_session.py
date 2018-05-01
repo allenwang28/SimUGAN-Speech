@@ -58,20 +58,20 @@ class SimGANSession(TensorflowSession):
         # specify classifier parameters
         
         # discriminator takes spectrograms as input
-        d_input_shape = (batch_size, feature_sizes[0], 200, 1)
+        d_input_shape = (batch_size, feature_sizes[0], 275)
          
         # discriminator's output is a 0 or a 1
         d_output_shape = (batch_size, 1)
 
         # refiner takes spectrograms as input
-        r_input_shape = (batch_size, feature_sizes[0], 200, 1)
+        r_input_shape = (batch_size, feature_sizes[0], 275)
 
         # refiner outputs spectrograms
-        r_output_shape = (batch_size, feature_sizes[0], 200, 1)
+        r_output_shape = (batch_size, feature_sizes[0], 275)
 
         # construct classifier
-        self.refiner_clf = Refiner(r_input_shape, r_output_shape, verbose=True)
         self.discrim_clf = Discriminator(d_input_shape, d_output_shape, verbose=True)
+        self.refiner_clf = Refiner(r_input_shape, r_output_shape, self.discrim_clf.fake_logits, verbose=True)
 
         self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
                                                      testing_folder_names,
