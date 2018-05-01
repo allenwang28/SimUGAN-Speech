@@ -70,8 +70,8 @@ class SimGANSession(TensorflowSession):
         r_output_shape = (batch_size, feature_sizes[0], 200, 1)
 
         # construct classifier
-        self.discrim_clf = Discriminator(d_input_shape, d_output_shape, verbose=True)
         self.refiner_clf = Refiner(r_input_shape, r_output_shape, verbose=True)
+        self.discrim_clf = Discriminator(d_input_shape, d_output_shape, verbose=True)
 
         self.librispeech = LibriSpeechBatchGenerator(training_folder_names,
                                                      testing_folder_names,

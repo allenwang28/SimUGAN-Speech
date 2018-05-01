@@ -15,8 +15,8 @@ class Discriminator(TensorflowModel):
                  input_shape,
                  output_shape,
                  verbose=True):
-        self.fake_logits = tf.placeholder(tf.int32, shape=output_shape)
-        self.real_logits = tf.placeholder(tf.int32, shape=output_shape)
+        self.fake_logits = tf.placeholder(tf.float32, shape=output_shape)
+        self.real_logits = tf.placeholder(tf.float32, shape=output_shape)
         super().__init__(input_shape, output_shape, verbose=verbose)
 
     @property
@@ -52,29 +52,30 @@ class Discriminator(TensorflowModel):
         # softmax 
         with tf.variable_scope('discrim_softmax') as scope:
             results = tf.nn.softmax(conv5)
-        return results, conv5
+        return conv5
 
     @define_scope
     def optimize(self):
-        optimizer = tf.train.AdamOptimizer(0.001)
+        optimizer = tf.train.AdamOptimizer(0.01)
         return optimizer.minimize(self.loss)
 
     @define_scope
     def loss(self):
+
         # self._target_tensor: fake labels of discriminator output 
-        real_label = tf.ones_like(self.real_logits)[:,0]
-        fake_label = tf.zeros_like(self.fake_logits)[:,0]
+        real_label = tf.ones_like(self.real_logits, dtype=tf.int32)[:,0]
+        fake_label = tf.zeros_like(self.fake_logits, dtype=tf.int32)[:,0]
 
         #print(self.real_logits.get_shape())
         #print(real_label.get_shape())
         #exit()
 
         refiner_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.fake_logits, labels=fake_label), [1, 2], name='refiner_d_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.fake_logits,labels=fake_label))
         
         # self.target_label: real label of real data
         synthetic_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.real_logits,labels=real_label), [1, 2], name="synthetic_d_loss")
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.real_logits,labels=real_label))
 
         return tf.reduce_mean(refiner_d_loss + synthetic_d_loss, name="discrim_loss")
 
