@@ -132,6 +132,7 @@ class SimGANSession(TensorflowSession):
                 synthetic_spectrograms = self.syntheticspeech.get_training_batch()[0]
 
                 feed_dict = { self.refiner_clf.input_tensor : synthetic_spectrograms }
+
                 refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
                 # Update theta by taking a SGD step on mini-batch loss L_r

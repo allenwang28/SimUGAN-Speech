@@ -52,7 +52,7 @@ class Discriminator(TensorflowModel):
               logits = slim.conv2d(layer, 2, 1, 1, scope="conv_5")
               output = tf.nn.softmax(logits, name="softmax")
               self.discrim_vars = tf.contrib.framework.get_variables(sc)
-        return output, logits
+        return logits
 
         """
         # conv1
@@ -91,7 +91,7 @@ class Discriminator(TensorflowModel):
 
     @define_scope
     def loss(self):
-        # self._target_tensor: fake labels of discriminator output 
+        # generate labels for data
         real_label = tf.ones_like(self.real_logits, dtype=tf.int32)[:,:,:,0]
         fake_label = tf.zeros_like(self.fake_logits, dtype=tf.int32)[:,:,:,0]
 

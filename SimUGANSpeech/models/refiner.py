@@ -13,6 +13,7 @@ import tensorflow.contrib.slim as slim
 from SimUGANSpeech.models.tf_decorate import define_scope
 from SimUGANSpeech.models.tf_class import TensorflowModel
 
+
 class Refiner(TensorflowModel):
     def __init__(self,
                  input_shape,
@@ -21,18 +22,65 @@ class Refiner(TensorflowModel):
                  learning_rate=0.001,
                  verbose=True):
         batch_size = input_shape[0]
-        self.discriminator_output = tf.placeholder(tf.float32, shape=(batch_size, 1))
+
+        self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)
+        self.discrim_output = self.construct(self.input_tensor, 'refiner', reuse=False)
+
         self.reg_scale = reg_scale
         self.learning_rate = learning_rate
-        super().__init__(input_shape, output_shape, verbose=verbose)
+
+        self.optimize
+        self.loss
+
+        tf.summary.scalar("{0}-loss".format(self.name), self.loss)
+        # super().__init__(input_shape, output_shape, verbose=verbose)
 
     @property
     def name(self):
         """Name of the model"""
         return "Refiner"
 
-    @define_scope(initializer=tf.contrib.slim.xavier_initializer())
-    def predictions(self):
+    #@define_scope(initializer=tf.contrib.slim.xavier_initializer())
+    def construct(self, layer, name, reuse=True):
+        with tf.variable_scope(name, reuse=reuse) as sc:
+            num_outputs = 64
+            kernel_size = [3, 3]
+            stride = [1, 1]
+            padding = 'SAME'
+
+            layer = slim.conv2d(layer, 64, 3, 1, scope="conv_1")
+
+            #resnet block 1
+            inputLayer = layer
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=tf.nn.relu, scope="conv2a")
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=None, scope="conv2b")
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 2
+            inputLayer = layer
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=tf.nn.relu, scope="conv3a")
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=None, scope="conv3b")
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 3
+            inputLayer = layer
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=tf.nn.relu, scope="conv4a")
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=None, scope="conv4b")
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 4
+            inputLayer = layer
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=tf.nn.relu, scope="conv5a")
+            layer = slim.conv2d(layer, num_outputs, kernel_size, stride, padding=padding, activation_fn=None, scope="conv5b")
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            layer = slim.conv2d(layer, 1, 1, 1, activation_fn=None, scope="conv_6")
+            output = tf.nn.tanh(layer, name="tanh")
+            self.refiner_vars = tf.contrib.framework.get_variables(sc)
+        return output 
+
+
+        """
         # conv1
         with tf.variable_scope('refiner_conv1') as scope:
             conv1 = slim.conv2d(self.input_tensor, 64, 3, 1, scope='conv_1', padding='SAME')
@@ -88,7 +136,7 @@ class Refiner(TensorflowModel):
         with tf.variable_scope('refiner_fc') as scope:
             results = tf.nn.tanh(conv3)
         return conv3
-
+        """
 
     @define_scope
     def optimize(self):
@@ -98,12 +146,13 @@ class Refiner(TensorflowModel):
    
     @define_scope
     def loss(self):
+
         # self._target_tensor: output of discriminator on the synthetic data; self._target_label: is the prediction label
-        target_label = tf.ones_like(self.discriminator_output, dtype=tf.int32)[:,0]
+        target_label = tf.ones_like(self.discrim_output, dtype=tf.int32)[:,:,:,0]
         realism_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_label, logits=self.discriminator_output), name='realism_loss')
+            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_label, logits=self.discrim_output), name='realism_loss')
         # self._output_tensor: output of refiner on the synthetic data; self.input_tensor: synthetic data
-        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.predictions - self.input_tensor), [1, 2, 3], name="regularization_loss")
+        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.discrim_output - self.input_tensor), [1, 2, 3], name="regularization_loss")
         return tf.reduce_mean(realism_loss + regularization_loss)
 
 
