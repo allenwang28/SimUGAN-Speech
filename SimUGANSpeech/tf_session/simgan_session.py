@@ -82,9 +82,7 @@ class SimGANSession(TensorflowSession):
                                                      validation_pct=validation_pct,
                                                      verbose=verbose)     
 
-        self.syntheticspeech = SyntheticSpeechBatchGenerator(training_folder_names,
-                                                             testing_folder_names,
-                                                             features,
+        self.syntheticspeech = SyntheticSpeechBatchGenerator(features,
                                                              feature_sizes=feature_sizes,
                                                              batch_size=batch_size,
                                                              chunk_pct=chunk_pct,

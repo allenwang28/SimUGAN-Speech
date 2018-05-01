@@ -24,7 +24,7 @@ class Discriminator(TensorflowModel):
 
         self.fake_input = tf.placeholder(tf.float32, shape=input_shape)
         self.real_input = tf.placeholder(tf.float32, shape=input_shape)
-        self.fake, self.fake_logits = self.construct(self.fake_input, 'discrim', reuse=True)
+        self.fake, self.fake_logits = self.construct(self.fake_input, 'discrim', reuse=False)
         self.real, self.real_logits = self.construct(self.real_input, 'discrim', reuse=True)
 
         self.optimize
