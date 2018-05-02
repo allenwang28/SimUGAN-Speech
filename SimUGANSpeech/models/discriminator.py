@@ -43,6 +43,31 @@ class Discriminator(TensorflowModel):
 
     #@define_scope(initializer=tf.contrib.slim.xavier_initializer())
     def construct(self, layer, name, reuse=True):
+        padding = 'SAME'
+
+        with tf.variable_scope(name, reuse=reuse) as sc:
+            #filter = tf.get_variable('weights', [1, 275, 128], dtype=tf.float32)
+            layer = tf.layers.conv1d(inputs=layer, filters=128, kernel_size=2, strides=1, padding=padding)
+
+            #filter = tf.get_variable('weights', [1, 128, 64], dtype=tf.float32)
+            layer = tf.layers.conv1d(layer, filters=64, kernel_size=2, strides=1, padding=padding)
+
+
+            layer = tf.layers.max_pooling1d(layer, pool_size=2, strides=1, padding='SAME')
+
+            #filter = tf.get_variable('weights', [1, 64, 32], dtype=tf.float32)
+            layer = tf.layers.conv1d(layer, filters=32, kernel_size=2, strides=1, padding=padding)
+
+           #filter = tf.get_variable('weights', [1, 32, 2], dtype=tf.float32)
+            layer = tf.layers.conv1d(layer, filters=16, kernel_size=2, strides=1, padding=padding)
+
+           # filter = tf.get_variable('weights', [1, 2, 2], dtype=tf.float32)
+            logits = tf.layers.conv1d(layer, filters=2, kernel_size=2, strides=1, padding=padding)
+
+            output = tf.nn.softmax(logits, name="softmax")
+            self.discrim_vars = tf.contrib.framework.get_variables(sc)
+        return logits
+        """
         with tf.variable_scope(name, reuse=reuse) as sc:
               layer = slim.conv2d(layer, 96, 3, 2, scope="conv_1")
               layer = slim.conv2d(layer, 64, 3, 2, scope="conv_2")
@@ -53,6 +78,7 @@ class Discriminator(TensorflowModel):
               output = tf.nn.softmax(logits, name="softmax")
               self.discrim_vars = tf.contrib.framework.get_variables(sc)
         return logits
+        """
 
         """
         # conv1
@@ -92,19 +118,24 @@ class Discriminator(TensorflowModel):
     @define_scope
     def loss(self):
         # generate labels for data
-        real_label = tf.ones_like(self.real_logits, dtype=tf.int32)[:,:,:,0]
-        fake_label = tf.zeros_like(self.fake_logits, dtype=tf.int32)[:,:,:,0]
+        real_label = tf.ones_like(self.real_logits, dtype=tf.int32)[:,:,0]
+        fake_label = tf.zeros_like(self.fake_logits, dtype=tf.int32)[:,:,0]
 
-        #print(self.real_logits.get_shape())
-        #print(real_label.get_shape())
-        #exit()
+        """
+        print(self.real_logits.get_shape())
+        print(real_label.get_shape())
+
+        print(self.fake_logits.get_shape())
+        print(fake_label.get_shape())
+        exit()
+        """
 
         refiner_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.fake_logits,labels=fake_label), [1, 2])
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.fake_logits,labels=fake_label))
         
         # self.target_label: real label of real data
         synthetic_d_loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.real_logits,labels=real_label), [1,2])
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.real_logits,labels=real_label))
 
         return tf.reduce_mean(refiner_d_loss + synthetic_d_loss, name="discrim_loss")
 

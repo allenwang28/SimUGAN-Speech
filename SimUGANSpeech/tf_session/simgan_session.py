@@ -12,6 +12,7 @@ Todo:
 """
 from SimUGANSpeech.tf_session import TensorflowSession
 
+import numpy as np
 import os
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
@@ -136,13 +137,13 @@ class SimGANSession(TensorflowSession):
                 refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
                 # Update theta by taking a SGD step on mini-batch loss L_r
-                feed_dict = { self.discrim_clf.input_tensor : refined_spectrograms }
-                discrim_logits = self.sess.run(self.discrim_clf.predictions, feed_dict=feed_dict)
+                feed_dict = { self.discrim_clf.fake_input : refined_spectrograms }
+                discrim_logits = self.sess.run(self.discrim_clf.fake_logits, feed_dict=feed_dict)
 
-                feed_dict = { self.refiner_clf.output_tensor : discrim_logits }
+                feed_dict = { self.refiner_clf.output_tensor : refined_spectrograms }
 
-                _, l, summary = sess.run([self.refiner_clf.optimize, self.refiner_clf.loss, self.summary_op],
-                                         feed_dict=feed_dict)
+
+                _, l, summary = self.sess.run([self.refiner_clf.optimize, self.refiner_clf.loss, self.summary_op], feed_dict=feed_dict)
 
             for j in range(num_real_iterations):
                 # Sample a mini-batch of synthetic images x_i, and real images y_j
@@ -157,7 +158,7 @@ class SimGANSession(TensorflowSession):
                 feed_dict = { self.discrim_clf.fake_input : refined_spectrograms,
                               self.discrim_clf.real_input : real_spectrograms }
 
-                _, l, summary = sess.run([self.discrim_clf.optimize, self.discrim_clf.loss, self.summary_op],
+                _, l, summary = self.sess.run([self.discrim_clf.optimize, self.discrim_clf.loss, self.summary_op],
                                          feed_dict=feed_dict)
 
             # Summarize

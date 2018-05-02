@@ -25,6 +25,8 @@ class Refiner(TensorflowModel):
         batch_size = input_shape[0]
         self.fake_logits = fake_logits
         self.input_tensor = tf.placeholder(tf.float32, shape=input_shape)
+        self.output_tensor = tf.placeholder(tf.float32, shape=output_shape)
+
         self.reg_scale = reg_scale
         self.learning_rate = learning_rate
 
@@ -39,6 +41,44 @@ class Refiner(TensorflowModel):
     def predictions(self):
         name=self.name
 
+        with tf.variable_scope(name) as sc:
+            kernel_size = [3, 3]
+            stride = [1, 1]
+            padding = 'SAME'
+
+            layer = tf.layers.conv1d(inputs=self.input_tensor, filters=275, kernel_size=1, strides=1, padding=padding)
+
+            #resnet block 1
+            inputLayer = layer
+            layer = tf.layers.conv1d(inputs=inputLayer, filters=275, kernel_size=1, strides=1, activation=tf.nn.relu, padding=padding)
+            layer = tf.layers.conv1d(inputs=layer, filters=275, kernel_size=1, strides=1, activation=None, padding=padding)
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 2
+            inputLayer = layer
+            layer = tf.layers.conv1d(inputs=inputLayer, filters=275, kernel_size=1, strides=1, activation=tf.nn.relu, padding=padding)
+            layer = tf.layers.conv1d(inputs=layer, filters=275, kernel_size=1, strides=1, activation=None, padding=padding)
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 3
+            inputLayer = layer
+            layer = tf.layers.conv1d(inputs=inputLayer, filters=275, kernel_size=1, strides=1, activation=tf.nn.relu, padding=padding)
+            layer = tf.layers.conv1d(inputs=layer, filters=275, kernel_size=1, strides=1, activation=None, padding=padding)
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            #resnet block 4
+            inputLayer = layer
+            layer = tf.layers.conv1d(inputs=inputLayer, filters=275, kernel_size=1, strides=1, activation=tf.nn.relu, padding=padding)
+            layer = tf.layers.conv1d(inputs=layer, filters=275, kernel_size=1, strides=1, activation=None, padding=padding)
+            layer = tf.nn.relu(tf.add(inputLayer, layer))
+
+            layer = tf.layers.conv1d(inputs=layer, filters=275, kernel_size=1, strides=1, activation=None, padding=padding)
+
+            output = tf.nn.tanh(layer, name="tanh")
+            self.refiner_vars = tf.contrib.framework.get_variables(sc)
+        return output 
+
+        """
         with tf.variable_scope(name) as sc:
             num_outputs = 64
             kernel_size = [3, 3]
@@ -75,65 +115,8 @@ class Refiner(TensorflowModel):
             output = tf.nn.tanh(layer, name="tanh")
             self.refiner_vars = tf.contrib.framework.get_variables(sc)
         return output 
-
-
         """
-        # conv1
-        with tf.variable_scope('refiner_conv1') as scope:
-            conv1 = slim.conv2d(self.input_tensor, 64, 3, 1, scope='conv_1', padding='SAME')
 
-        # resnet
-        with tf.variable_scope('refiner_resnet') as scope:
-            num_outputs = 64
-            kernel_size = [3, 3]
-            stride = [1, 1]
-            padding = 'SAME'
-
-            # resnet block 1
-            layer = slim.conv2d(conv1, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv1")
-            layer = slim.conv2d(layer, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv2")
-            resnet_output1 = tf.nn.relu(tf.add(conv1, layer))
-
-            # resnet block 2
-            layer = slim.conv2d(resnet_output1, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv3")
-            layer = slim.conv2d(layer, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv4")
-            resnet_output2 = tf.nn.relu(tf.add(resnet_output1, layer))
-
-            # resnet block 3
-            layer = slim.conv2d(resnet_output2, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv5")
-            layer = slim.conv2d(layer, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv6")
-            resnet_output3 = tf.nn.relu(tf.add(resnet_output2, layer))
-
-            # resnet block 4
-            layer = slim.conv2d(resnet_output3, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv7")
-            layer = slim.conv2d(layer, num_outputs, kernel_size, stride,
-                padding=padding, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer(), 
-                biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope="conv8")
-            resnet_output = tf.nn.relu(tf.add(resnet_output3, layer))
-
-        # conv2
-        with tf.variable_scope('refiner_conv2') as scope:
-            conv3 = slim.conv2d(resnet_output, 1, 1, 1, scope='conv9', padding='SAME')
-
-        # activation function
-        with tf.variable_scope('refiner_fc') as scope:
-            results = tf.nn.tanh(conv3)
-        return conv3
-    """
 
     @define_scope
     def optimize(self):
@@ -144,11 +127,18 @@ class Refiner(TensorflowModel):
     @define_scope
     def loss(self):
         # self._target_tensor: output of discriminator on the synthetic data; self._target_label: is the prediction label
-        target_label = tf.ones_like(self.fake_logits, dtype=tf.int32)[:,:,:,0]
+        target_label = tf.ones_like(self.fake_logits, dtype=tf.int32)[:,:,0]
+
+
+        #print(self.fake_logits.get_shape())
+        #print(target_label.get_shape())
+       #exit()
+
+
         realism_loss = tf.reduce_sum(
             tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_label, logits=self.fake_logits), name='realism_loss')
         # self._output_tensor: output of refiner on the synthetic data; self.input_tensor: synthetic data
-        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.predictions- self.input_tensor), [1, 2, 3], name="regularization_loss")
+        regularization_loss = self.reg_scale * tf.reduce_sum(tf.abs(self.output_tensor- self.input_tensor), name="regularization_loss")
         return tf.reduce_mean(realism_loss + regularization_loss)
 
 
