@@ -15,9 +15,9 @@ import numpy as np
 from SimUGANSpeech.data import LibriSpeechBatchGenerator
 from SimUGANSpeech.models import Wav2Letter
 from SimUGANSpeech.definitions import TENSORFLOW_DIR, DATA_DIR, TF_LOGS_DIR
-from SimUGANSpeech.util.data_util import one_hot_transcriptions 
+from SimUGANSpeech.util.data_util import tf_transcriptions, get_sequence_lengths
 
-vocabulary_size = 28
+vocabulary_size = 29
 
 class Wav2LetterSession(TensorflowSession):
     @property
@@ -43,13 +43,15 @@ class Wav2LetterSession(TensorflowSession):
         training_folder_names = [ 'dev-clean' ]
         testing_folder_names = []
         features = [ 'mfcc', 'transcription' ]
-        feature_sizes = [ 1200, 100 ]
+        feature_sizes = [ 1200, 10 ]
         batch_size = 10
         verbose = True
         chunk_pct = None
-        num_epochs = 100
         validation_pct = 0.3
         num_mfcc_features = 40
+
+        self.batch_size = batch_size
+        self.max_transcription_time = feature_sizes[1]
 
         input_shape = (batch_size, feature_sizes[0], num_mfcc_features)
         output_shape = (batch_size, feature_sizes[1], vocabulary_size)
@@ -70,8 +72,7 @@ class Wav2LetterSession(TensorflowSession):
     def train(self,
               num_epochs,
               backup_rate=100,
-              display_rate=10,
-              batch_size=100):
+              display_rate=10):
         """Run the training loop for ASR 
 
         Args:
@@ -96,7 +97,7 @@ class Wav2LetterSession(TensorflowSession):
             if self._verbose: 
                 if epoch % display_rate == 0:
                     # print ("Test error: {:6.2f}%".format(100 * self.test()))
-                    print ("blah")
+                    print ("epoch {0}".format(epoch))
                     
             num_batches = self.librispeech.num_batches
 
@@ -104,16 +105,21 @@ class Wav2LetterSession(TensorflowSession):
                 # Load batch
                 batch = self.librispeech.get_training_batch()
                 batch_mfcc, batch_transcriptions = batch[0], batch[1]
-                batch_transcriptions = one_hot_transcriptions(batch_transcriptions, vocabulary_size)
+
+
+                sequence_lengths = get_sequence_lengths(batch_transcriptions)
+                batch_transcriptions = tf_transcriptions(batch_transcriptions, self.max_transcription_time)
                 
                 # Create map for batch to graph
                 feed_dict = { self.clf.input_tensor : batch_mfcc,
-                              self.clf.output_tensor : batch_transcriptions }
+                              self.clf.output_tensor : batch_transcriptions,
+                              self.clf.sequence_lengths_tensor : sequence_lengths
+                            }
 
                 # Run optimizer, get cost, and summarize
-                self.sess.run(self.clf.optimize, feed_dict=feed_dict)
-                #_, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
-                #self.summary_writer.add_summary(summary, epoch * num_batches + i)
+                _, l, summary = self.sess.run([self.clf.optimize, self.clf.loss, self.summary_op], feed_dict=feed_dict)
+                print (l)
+                self.summary_writer.add_summary(summary, epoch * num_batches + i)
 
         self.save_checkpoint()
 
@@ -121,7 +127,7 @@ class Wav2LetterSession(TensorflowSession):
         """Return the error for the current model."""
         batch = self.librispeech.get_validation_data()
         mfcc, transcriptions = batch[0], batch[1]
-        transcriptions = one_hot_transcriptions(transcriptions, vocabulary_size)
+        transcriptions = tf_transcriptions(transcriptions, self.max_transcription_time)
         error = self.sess.run(self.clf.error, {self.clf.input_tensor : mfcc, self.clf.output_tensor: transcriptions})
         return error
 

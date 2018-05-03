@@ -14,6 +14,8 @@ class Wav2Letter(TensorflowModel):
     def __init__(self,
                  input_shape,
                  output_shape,
+                 input_tensor=None,
+                 output_tensor=None,
                  learning_rate=1e-3,
                  learning_rate_decay_factor=0,
                  max_gradient_norm=5.0,
@@ -26,13 +28,21 @@ class Wav2Letter(TensorflowModel):
         tf.summary.scalar('learning_rate', self._learning_rate)
         self._max_gradient_norm = max_gradient_norm
         self.global_step = tf.Variable(0, trainable=False)
-        super().__init__(input_shape, output_shape, verbose=verbose, sparse_output=True)
+        self._batch_size = input_shape[0] 
+        self.sequence_lengths_tensor = tf.placeholder(tf.int32, shape=(self._batch_size))
+
+        super().__init__(input_shape, output_shape, 
+                         input_tensor = input_tensor,
+                         output_tensor = output_tensor,
+                         verbose=verbose, sparse_output=True)
+
 
 
     @property
     def name(self):
         """Name of the model"""
         return "Wav2Letter"
+
 
     @define_scope(initializer=tf.contrib.slim.xavier_initializer())
     def predictions(self):
@@ -71,15 +81,18 @@ class Wav2Letter(TensorflowModel):
     @define_scope
     def loss(self):
         """Loss function"""
-        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self._batch_size // 2)
+        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor)
         return tf.reduce_mean(cost, name='loss')
 
 
     @define_scope
     def error(self):
         """Error function"""
+        """
         # TODO - make this different from the loss
-        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self._batch_size // 2)
+        cost = tf.nn.ctc_loss(self.output_tensor, self.predictions, self.sequence_lengths_tensor // 2, ignore_longer_outputs_than_inputs=True)
         return tf.reduce_mean(cost, name='loss')
+        """
+        return None
 
 
