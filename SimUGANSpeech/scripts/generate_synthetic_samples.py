@@ -13,7 +13,7 @@ TODO:
 
 """
 import os
-import tts.sapi # this import is only used when generating the samples
+#import tts.sapi # this import is only used when generating the samples
 import pickle
 import time
 import sys
@@ -164,6 +164,17 @@ def generate_speech_from_texts(save_dir, texts, percentage=1.0, verbose=True):
     pickle.dump(master, open(master_path, 'wb'))
 
 
+def remap_paths(save_dir, verbose):
+    if verbose:
+        print ("Remapping master file")
+    
+    master_path = os.path.join(save_dir, 'master.pkl')
+    master = pickle.load(open(master_path, 'rb'))
+    basename = lambda x: re.compile(r'\\|\/').split(x)[-1]
+    master['paths'] = [os.path.join(save_dir, basename(p)) for p in master['paths']]
+    pickle.dump(master, open(master_path, 'wb'))
+
+
 
 if __name__ == "__main__":
     # Arg parse...
@@ -174,6 +185,8 @@ if __name__ == "__main__":
                         help="Delete all existing data")
     parser.add_argument("--percentage", default=1.0, type=float,
                         help="Between 0.0 and 1.0. Use this to only process a subset of the data.")
+    parser.add_argument("--remap", action='store_true',
+                        help="Remap the master file")
 
     # Options for which folders to use
     for folder in POSSIBLE_FOLDERS: 
@@ -225,5 +238,8 @@ if __name__ == "__main__":
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    transcriptions = get_librispeech_texts(folder_names)
-    generate_speech_from_texts(save_dir, transcriptions, percentage=args.percentage, verbose=args.verbose)
+    if args.remap:
+        remap_paths(save_dir, args.verbose)
+    else:
+        transcriptions = get_librispeech_texts(folder_names)
+        generate_speech_from_texts(save_dir, transcriptions, percentage=args.percentage, verbose=args.verbose)
