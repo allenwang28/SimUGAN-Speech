@@ -154,6 +154,10 @@ class SimGANSession(TensorflowSession):
                 feed_dict = { self.refiner_clf.input_tensor : synthetic_spectrograms }
                 refined_spectrograms = self.sess.run(self.refiner_clf.predictions, feed_dict=feed_dict)
 
+                print (len(real_spectrograms))
+                print (len(real_spectrograms[0]))
+                print (len(real_spectrograms[0][0]))
+
                 # Update phi by taking a SGD step on mini-batch loss L_d
                 feed_dict = { self.discrim_clf.fake_input : refined_spectrograms,
                               self.discrim_clf.real_input : real_spectrograms }
