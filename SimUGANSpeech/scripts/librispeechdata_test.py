@@ -12,7 +12,7 @@ if __name__ == "__main__":
                    ]
 
     features = [
-                 'mfcc',
+                 'spectrogram',
                  'transcription'
                ]
 
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     batch_size = 2
     verbose = True
 
-    chunk_pct=None
+    chunk_pct=0.2
     num_iterations = 3
 
     audio_params = AudioParams()

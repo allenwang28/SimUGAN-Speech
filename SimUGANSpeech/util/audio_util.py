@@ -23,7 +23,7 @@ import time
 from deco import concurrent, synchronized
 import pickle
 
-@concurrent 
+#@concurrent 
 def get_audio_feature_from_path_cc(path, feature, params):
     """Utility function for concurrent spectrogram from path"""
     if feature == 'mfcc':
@@ -43,6 +43,7 @@ def get_audio_feature_from_path_cc(path, feature, params):
                                                lowcut=params.lowcut,
                                                log=params.spectro_log,
                                                thresh=params.spectro_thresh,
+                                               NFFT=params.nfft,
                                                frame_size_in_ms=params.frame_size_in_ms,
                                                frame_stride_in_ms=params.frame_stride_in_ms,
                                                max_time_in_s=params.max_time_in_s,
@@ -51,7 +52,7 @@ def get_audio_feature_from_path_cc(path, feature, params):
         raise ValueError("Unsupported feature {0} provided".format(feature))          
 
 
-@synchronized
+#@synchronized
 def get_audio_features_from_path_cc(audio_files, feature, params):
     """Utility function for synchronizing concurrent spectrogram from paths"""
     # Use a dictionary - concurrent processing does not preserve order

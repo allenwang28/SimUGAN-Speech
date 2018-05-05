@@ -16,7 +16,7 @@ def unet1d(input_shape, output_shape, num_filters):
     def deconv1d(layer_input, skip_input, filters, f_size=4, dropout_rate=0):
         """Layers for upsampling"""
         u = UpSampling1D(size=2)(layer_input)
-        u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
+        u = Conv1D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
         if dropout_rate:
             u = Dropout(dropout_rate)(u)
         u = BatchNormalization(momentum=0.8)(u)
@@ -42,8 +42,8 @@ def unet1d(input_shape, output_shape, num_filters):
     u5 = deconv1d(u4, d2, num_filters*2)
     u6 = deconv1d(u5, d1, num_filters)
 
-    u7 = UpSampling1d(size=2)(u6)
-    output = Conv1D(channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u7)
+    u7 = UpSampling1D(size=2)(u6)
+    output = Conv1D(output_shape[1], kernel_size=4, strides=1, padding='same', activation='tanh')(u7)
 
     return Model(d0, output)
 

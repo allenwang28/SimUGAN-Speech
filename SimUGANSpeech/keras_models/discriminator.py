@@ -1,5 +1,4 @@
-
-from keras.layers import Input, BatchNormalization
+from keras.layers import Input, BatchNormalization, Concatenate
 from keras.layers.convolutional import Conv1D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
@@ -12,18 +11,18 @@ def convdiscriminator1d(input_shape, num_filters):
             d = BatchNormalization(momentum=0.8)(d)
         return d
 
-    img_A = Input(shape=input_shape)
-    img_B = Input(shape=input_shape)
+    input_A = Input(shape=input_shape)
+    input_B = Input(shape=input_shape)
 
     # Concatenate image and conditioning image by channels to produce input
-    combined_imgs = Concatenate(axis=-1)([img_A, img_B])
+    combined_inputs = Concatenate(axis=-1)([input_A, input_B])
 
-    d1 = d_layer(combined_imgs, num_filters, bn=False)
+    d1 = d_layer(combined_inputs, num_filters, bn=False)
     d2 = d_layer(d1, num_filters*2)
     d3 = d_layer(d2, num_filters*4)
     d4 = d_layer(d3, num_filters*8)
 
     validity = Conv1D(1, kernel_size=4, strides=1, padding='same')(d4)
 
-    return Model([img_A, img_B], validity)
+    return Model([input_A, input_B], validity)
 

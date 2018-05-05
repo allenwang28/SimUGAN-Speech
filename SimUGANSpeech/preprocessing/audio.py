@@ -78,6 +78,7 @@ def get_spectrogram_from_path(file_path,
                               lowcut=DEFAULT_LOWCUT,
                               log=DEFAULT_SPECTRO_LOG,
                               thresh=DEFAULT_SPECTRO_THRESH,
+                              NFFT=DEFAULT_NFFT,
                               frame_size_in_ms=DEFAULT_FRAME_SIZE_MS,
                               frame_stride_in_ms=DEFAULT_FRAME_STRIDE_MS,
                               max_time_in_s=DEFAULT_MAX_TIME_IN_S,
@@ -107,6 +108,7 @@ def get_spectrogram_from_path(file_path,
                             frame_size_in_ms=frame_size_in_ms,
                             frame_stride_in_ms=frame_stride_in_ms,
                             log=log,
+                            NFFT=NFFT,
                             thresh=thresh)
 
 
@@ -213,6 +215,7 @@ def extract_frames_from_signal(signal,
 
 def stft(windowed_signal,
          real=DEFAULT_REAL,
+         NFFT=DEFAULT_NFFT,
          compute_onesided=DEFAULT_ONE_SIDED):
     """Compute the STFT of a windowed signal
 
@@ -238,7 +241,7 @@ def stft(windowed_signal,
     size = windowed_signal.shape[1]
     win = 0.54 - .46 * np.cos(2 * np.pi * np.arange(size) / (size - 1))
     windowed_signal = windowed_signal * win[None]
-    windowed_signal = local_fft(windowed_signal)[:, :cut]
+    windowed_signal = local_fft(windowed_signal, n=NFFT)[:, :cut]
     return windowed_signal
 
 
@@ -269,6 +272,7 @@ def stft_spectrogram(signal,
                      samplerate,
                      log=DEFAULT_SPECTRO_LOG,
                      thresh=DEFAULT_SPECTRO_THRESH,
+                     NFFT=DEFAULT_NFFT,
                      frame_size_in_ms=DEFAULT_FRAME_SIZE_MS,
                      frame_stride_in_ms=DEFAULT_FRAME_STRIDE_MS,
                      real=DEFAULT_REAL):
@@ -293,7 +297,8 @@ def stft_spectrogram(signal,
 
     spectrogram = np.abs(stft(windowed_signal,
                               real=real,
-                              compute_onesided=True))
+                              NFFT=NFFT,
+                              compute_onesided=False))
 
     if log:
         spectrogram /= spectrogram.max() # First normalize the volume
