@@ -75,13 +75,12 @@ class SimUGANSpeech():
                               optimizer=optimizer)
 
     def get_model_paths(self, backup_num=None):
-
         if backup_num: 
-            h5_extension = ".h5"
-            json_extension = ".json"
-        else:
             h5_extension = "{0}.h5".format(backup_num)
             json_extension = "{0}.json".format(backup_num)
+        else:
+            h5_extension = ".h5"
+            json_extension = ".json"
 
         model_paths = []
         model_paths.append(os.path.join(KERAS_DIR, 'refiner_weights{0}'.format(h5_extension)))
@@ -105,7 +104,8 @@ class SimUGANSpeech():
 
         with open(ca, 'r') as f:
             self.combined = model_from_json(f.read())
-        self.combined.load_weights(ca)
+        self.combined.load_weights(cw)
+
 
 
     def save_models(self, backup_num=None):
@@ -203,7 +203,7 @@ if __name__ == '__main__':
                                                     verbose=verbose)  
 
     gan = SimUGANSpeech(spectrogram_shape)
-    gan.train(epochs=500,
+    gan.train(epochs=3000,
               real_data_source=librispeech,
               fake_data_source=syntheticspeech,
               batch_size=batch_size,
